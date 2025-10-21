@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Macro Assistant</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      width: 400px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      padding: 20px;
+      background: linear-gradient(135deg, #ffb3ed 0%, #ffc6f2 100%);
+    }
+    
+    h1 {
+      color: white;
+      font-size: 20px;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+    
+    .form-group {
+      background: white;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 15px;
+    }
+    
+    input {
+      width: 100%;
+      padding: 10px;
+      border: 2px solid #ffd9f6;
+      border-radius: 6px;
+      font-size: 14px;
+      margin-bottom: 10px;
+    }
+    
+    input:focus {
+      outline: none;
+      border-color: #ffb3ed;
+    }
+    
+    button {
+      width: 100%;
+      padding: 12px;
+      background: linear-gradient(135deg, #ffb3ed 0%, #ffc6f2 100%);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    
+    button:hover {
+      transform: translateY(-2px);
+    }
+    
+    button:active {
+      transform: translateY(0);
+    }
+    
+    .macros {
+      background: white;
+      border-radius: 8px;
+      padding: 15px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    
+    .macro-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px;
+      border-bottom: 1px solid #ffd9f6;
+    }
+    
+    .macro-item:last-child {
+      border-bottom: none;
+    }
+    
+    .macro-command {
+      font-weight: 600;
+      color: #d946ef;
+      font-family: monospace;
+    }
+    
+    .macro-text {
+      flex: 1;
+      margin: 0 10px;
+      font-size: 13px;
+      color: #666;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    
+    .macro-delete {
+      background: #ff6b6b;
+      color: white;
+      border: none;
+      padding: 5px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    
+    .empty {
+      text-align: center;
+      color: #999;
+      padding: 20px;
+    }
+    
+    .info {
+      background: white;
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 15px;
+      font-size: 13px;
+      color: #666;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎯 Macro Assistant</h1>
+  
+  <div class="info">
+    Digite <strong>#comando + Espaço</strong><br>
+    <span style="font-size: 12px; color: #999;">✨ Substitui automaticamente!</span>
+  </div>
+  
+  <div class="form-group">
+    <input type="text" id="command" placeholder="#comando" autocomplete="off">
+    <input type="text" id="text" placeholder="Texto da macro" autocomplete="off">
+    <button id="add">Adicionar Macro</button>
+  </div>
+  
+  <div class="macros" id="macros"></div>
+  
+  <script src="popup.js"></script>
+</body>
+</html>

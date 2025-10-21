@@ -1,0 +1,96 @@
+// Elementos
+const commandInput = document.getElementById('command');
+const textInput = document.getElementById('text');
+const addButton = document.getElementById('add');
+const macrosContainer = document.getElementById('macros');
+
+// Carregar macros
+function loadMacros() {
+  chrome.storage.local.get(['macros'], (result) => {
+    const macros = result.macros || {};
+    displayMacros(macros);
+  });
+}
+
+// Exibir macros
+function displayMacros(macros) {
+  if (Object.keys(macros).length === 0) {
+    macrosContainer.innerHTML = '<div class="empty">Nenhuma macro cadastrada</div>';
+    return;
+  }
+  
+  macrosContainer.innerHTML = '';
+  
+  for (const [command, text] of Object.entries(macros)) {
+    const item = document.createElement('div');
+    item.className = 'macro-item';
+    
+    item.innerHTML = `
+      <div class="macro-command">${command}</div>
+      <div class="macro-text" title="${text}">${text}</div>
+      <button class="macro-delete" data-command="${command}">🗑️</button>
+    `;
+    
+    macrosContainer.appendChild(item);
+  }
+  
+  // Event listeners para deletar
+  document.querySelectorAll('.macro-delete').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const command = e.target.dataset.command;
+      deleteMacro(command);
+    });
+  });
+}
+
+// Adicionar macro
+function addMacro() {
+  const command = commandInput.value.trim();
+  const text = textInput.value.trim();
+  
+  if (!command || !text) {
+    alert('Preencha ambos os campos!');
+    return;
+  }
+  
+  if (!command.startsWith('#')) {
+    alert('O comando deve começar com #');
+    return;
+  }
+  
+  chrome.storage.local.get(['macros'], (result) => {
+    const macros = result.macros || {};
+    macros[command] = text;
+    
+    chrome.storage.local.set({ macros }, () => {
+      commandInput.value = '';
+      textInput.value = '';
+      commandInput.focus();
+      loadMacros();
+    });
+  });
+}
+
+// Deletar macro
+function deleteMacro(command) {
+  chrome.storage.local.get(['macros'], (result) => {
+    const macros = result.macros || {};
+    delete macros[command];
+    
+    chrome.storage.local.set({ macros }, () => {
+      loadMacros();
+    });
+  });
+}
+
+// Event listeners
+addButton.addEventListener('click', addMacro);
+commandInput.addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') textInput.focus();
+});
+textInput.addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') addMacro();
+});
+
+// Carregar ao abrir
+loadMacros();

@@ -10,252 +10,346 @@
       padding: 0;
       box-sizing: border-box;
     }
-
+    
     body {
-      width: 400px;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-      background: #ffffff;
-      color: #333;
+      width: 450px;
+      min-height: 550px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #ffb3ed 0%, #ffc6f2 25%, #ffd9f6 75%, #ffecfb 100%);
+      padding: 0;
+      overflow: hidden;
     }
-
-    .container {
-      padding: 20px;
+    
+    .header {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      padding: 20px 24px;
+      border-bottom: 1px solid rgba(255, 179, 237, 0.2);
+      box-shadow: 0 2px 12px rgba(255, 179, 237, 0.15);
     }
-
+    
     h1 {
+      color: #d946a6;
       font-size: 22px;
-      color: #ffb3ed;
-      margin-bottom: 20px;
-      text-align: center;
-      font-weight: 600;
+      font-weight: 700;
+      margin-bottom: 8px;
       letter-spacing: -0.5px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
     }
-
-    .form-card {
-      background: #ffffff;
-      border: 1px solid #ffecfb;
-      border-radius: 8px;
-      padding: 16px;
+    
+    .subtitle {
+      color: #9ca3af;
+      font-size: 13px;
+      font-weight: 400;
+    }
+    
+    .content {
+      padding: 20px 24px;
+      height: calc(550px - 95px);
+      overflow-y: auto;
+    }
+    
+    .input-section {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 16px rgba(255, 179, 237, 0.12);
+      border: 1px solid rgba(255, 179, 237, 0.2);
+    }
+    
+    .input-group {
+      position: relative;
       margin-bottom: 16px;
     }
-
-    .form-group {
-      margin-bottom: 12px;
+    
+    .input-group:last-of-type {
+      margin-bottom: 0;
     }
-
+    
     label {
       display: block;
+      color: #6b7280;
       font-size: 12px;
-      font-weight: 500;
-      color: #ffb3ed;
-      margin-bottom: 6px;
+      font-weight: 600;
+      margin-bottom: 8px;
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
-
-    .input-with-icon {
-      position: relative;
-      display: flex;
-      align-items: center;
-    }
-
-    .input-icon {
-      position: absolute;
-      left: 12px;
-      color: #ffb3ed;
-      font-size: 16px;
-      font-weight: 600;
-      pointer-events: none;
-      z-index: 1;
-    }
-
-    input[type="text"],
-    textarea {
+    
+    input, textarea {
       width: 100%;
-      padding: 10px 12px;
-      border: 1px solid #ffd9f6;
-      border-radius: 6px;
+      padding: 12px 16px;
+      border: 2px solid #f3f4f6;
+      border-radius: 10px;
       font-size: 14px;
       font-family: inherit;
       transition: all 0.2s ease;
-      background: #ffffff;
+      background: white;
+      color: #1f2937;
     }
-
-    #command {
-      padding-left: 30px;
-    }
-
-    input[type="text"]:focus,
-    textarea:focus {
-      outline: none;
-      border-color: #ffc6f2;
-      background: #ffecfb;
-    }
-
-    input[type="text"]:disabled {
-      background: #ffecfb;
-      color: #999;
-      cursor: not-allowed;
-    }
-
+    
     textarea {
       resize: vertical;
-      min-height: 70px;
+      min-height: 80px;
+      line-height: 1.5;
     }
-
-    .form-actions {
+    
+    input:focus, textarea:focus {
+      outline: none;
+      border-color: #ffb3ed;
+      box-shadow: 0 0 0 4px rgba(255, 179, 237, 0.1);
+    }
+    
+    input::placeholder, textarea::placeholder {
+      color: #d1d5db;
+    }
+    
+    .btn-group {
       display: flex;
-      gap: 8px;
+      gap: 10px;
+      margin-top: 16px;
     }
-
-    .btn {
+    
+    button {
       flex: 1;
-      padding: 10px;
-      background: #ffb3ed;
-      color: #ffffff;
+      padding: 12px 20px;
+      background: linear-gradient(135deg, #ffb3ed 0%, #ffc6f2 100%);
+      color: white;
       border: none;
-      border-radius: 6px;
-      font-size: 13px;
-      font-weight: 500;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
       cursor: pointer;
       transition: all 0.2s ease;
+      box-shadow: 0 2px 8px rgba(255, 179, 237, 0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
     }
-
-    .btn:hover {
-      background: #ffc6f2;
+    
+    button:hover {
       transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(255, 179, 237, 0.4);
     }
-
-    .btn:active {
+    
+    button:active {
       transform: translateY(0);
+      box-shadow: 0 2px 6px rgba(255, 179, 237, 0.3);
     }
-
-    .btn-cancel {
-      background: #ffd9f6;
-      color: #ffb3ed;
+    
+    .btn-secondary {
+      background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+      color: #6b7280;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
     }
-
-    .btn-cancel:hover {
-      background: #ffc6f2;
-      color: #ffffff;
+    
+    .btn-secondary:hover {
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
     }
-
-    .macros-list {
-      background: #ffffff;
-      border: 1px solid #ffecfb;
-      border-radius: 8px;
-      padding: 16px;
-      max-height: 300px;
-      overflow-y: auto;
+    
+    .macros-section {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 4px 16px rgba(255, 179, 237, 0.12);
+      border: 1px solid rgba(255, 179, 237, 0.2);
     }
-
-    .macros-list h2 {
-      font-size: 12px;
-      color: #ffb3ed;
-      margin-bottom: 12px;
-      padding-bottom: 8px;
-      border-bottom: 1px solid #ffecfb;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      font-weight: 500;
-    }
-
-    .macro-item {
-      background: #ffecfb;
-      border-radius: 6px;
-      padding: 10px;
-      margin-bottom: 8px;
+    
+    .section-header {
       display: flex;
       justify-content: space-between;
-      align-items: start;
-      transition: all 0.2s ease;
-      border: 1px solid transparent;
+      align-items: center;
+      margin-bottom: 16px;
     }
-
-    .macro-item:hover {
-      background: #ffd9f6;
-      border-color: #ffc6f2;
+    
+    .section-title {
+      color: #1f2937;
+      font-size: 15px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
-
-    .macro-content {
-      flex: 1;
-    }
-
-    .macro-command {
-      font-weight: 600;
-      color: #ffb3ed;
-      font-size: 13px;
-      margin-bottom: 4px;
-    }
-
-    .macro-message {
+    
+    .macro-count {
+      background: linear-gradient(135deg, #ffecfb 0%, #ffd9f6 100%);
+      color: #d946a6;
+      padding: 4px 10px;
+      border-radius: 12px;
       font-size: 12px;
-      color: #666;
-      word-break: break-word;
-      line-height: 1.4;
+      font-weight: 700;
     }
-
+    
+    .clear-all-btn {
+      padding: 6px 12px;
+      font-size: 12px;
+      background: transparent;
+      color: #ef4444;
+      border: 1px solid #fecaca;
+      box-shadow: none;
+      flex: none;
+    }
+    
+    .clear-all-btn:hover {
+      background: #fef2f2;
+      border-color: #ef4444;
+    }
+    
+    #macros-list {
+      max-height: 280px;
+      overflow-y: auto;
+      margin-top: 12px;
+    }
+    
+    .macro-item {
+      background: linear-gradient(135deg, #ffffff 0%, #ffecfb 100%);
+      padding: 14px 16px;
+      margin-bottom: 10px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 179, 237, 0.15);
+      transition: all 0.2s ease;
+      position: relative;
+    }
+    
+    .macro-item:hover {
+      transform: translateX(4px);
+      box-shadow: 0 4px 12px rgba(255, 179, 237, 0.2);
+      border-color: rgba(255, 179, 237, 0.3);
+    }
+    
+    .macro-item:last-child {
+      margin-bottom: 0;
+    }
+    
+    .macro-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+    }
+    
+    .macro-info {
+      flex: 1;
+      min-width: 0;
+    }
+    
+    .macro-command {
+      font-weight: 700;
+      color: #d946a6;
+      font-size: 14px;
+      margin-bottom: 6px;
+      font-family: 'Courier New', monospace;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    
+    .macro-text {
+      color: #6b7280;
+      font-size: 13px;
+      line-height: 1.5;
+      word-wrap: break-word;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      white-space: pre-wrap;
+    }
+    
     .macro-actions {
       display: flex;
-      flex-direction: column;
-      gap: 4px;
-      margin-left: 8px;
+      gap: 6px;
+      flex-shrink: 0;
     }
-
-    .edit-btn,
-    .delete-btn {
-      color: #ffb3ed;
-      border: 1px solid #ffc6f2;
-      background: #ffffff;
-      border-radius: 4px;
-      padding: 4px 10px;
-      font-size: 11px;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      white-space: nowrap;
-      font-weight: 500;
+    
+    .icon-btn {
+      width: 32px;
+      height: 32px;
+      padding: 0;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      background: white;
+      color: #6b7280;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+      flex: none;
     }
-
+    
+    .icon-btn:hover {
+      transform: scale(1.05);
+    }
+    
+    .edit-btn {
+      color: #3b82f6;
+      border-color: rgba(59, 130, 246, 0.2);
+    }
+    
     .edit-btn:hover {
-      background: #ffb3ed;
-      color: #ffffff;
-      border-color: #ffb3ed;
+      background: #eff6ff;
+      border-color: #3b82f6;
     }
-
+    
+    .delete-btn {
+      color: #ef4444;
+      border-color: rgba(239, 68, 68, 0.2);
+    }
+    
     .delete-btn:hover {
-      background: #ffc6f2;
-      color: #ffffff;
-      border-color: #ffc6f2;
+      background: #fef2f2;
+      border-color: #ef4444;
     }
-
+    
     .empty-state {
       text-align: center;
-      padding: 30px 20px;
-      color: #ffc6f2;
-      font-size: 13px;
+      padding: 40px 20px;
+      color: #9ca3af;
     }
-
+    
     .empty-state-icon {
-      font-size: 40px;
-      margin-bottom: 8px;
-      opacity: 0.6;
-    }
-
-    .success-message {
-      background: #ffecfb;
-      color: #ffb3ed;
-      padding: 10px;
-      border-radius: 6px;
-      text-align: center;
+      font-size: 48px;
       margin-bottom: 12px;
-      font-size: 12px;
-      font-weight: 500;
-      display: none;
-      animation: slideDown 0.3s ease;
-      border: 1px solid #ffd9f6;
+      opacity: 0.5;
     }
-
-    @keyframes slideDown {
+    
+    .empty-state-text {
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+      background: #ffc6f2;
+      border-radius: 3px;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+      background: #ffb3ed;
+    }
+    
+    .editing {
+      background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+    
+    @keyframes slideIn {
       from {
         opacity: 0;
         transform: translateY(-10px);
@@ -265,82 +359,70 @@
         transform: translateY(0);
       }
     }
-
-    .success-message.show {
-      display: block;
-    }
-
-    /* Scrollbar personalizado */
-    .macros-list::-webkit-scrollbar {
-      width: 6px;
-    }
-
-    .macros-list::-webkit-scrollbar-track {
-      background: #ffecfb;
-      border-radius: 3px;
-    }
-
-    .macros-list::-webkit-scrollbar-thumb {
-      background: #ffc6f2;
-      border-radius: 3px;
-    }
-
-    .macros-list::-webkit-scrollbar-thumb:hover {
-      background: #ffb3ed;
+    
+    .macro-item {
+      animation: slideIn 0.3s ease;
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>Macro Assistant</h1>
+  <div class="header">
+    <h1>
+      <span>✨</span>
+      <span>Macro Assistant</span>
+    </h1>
+    <div class="subtitle">Expanda seu texto com atalhos personalizados</div>
+  </div>
+  
+  <div class="content">
+    <div class="input-section">
+      <div class="input-group">
+        <label for="command-input">Comando</label>
+        <input type="text" id="command-input" placeholder="Digite o comando (ex: #oi)">
+      </div>
+      
+      <div class="input-group">
+        <label for="text-input">Texto da Macro</label>
+        <textarea id="text-input" placeholder="Digite o texto que será expandido..."></textarea>
+      </div>
+      
+      <div class="btn-group">
+        <button id="cancel-btn" class="btn-secondary" style="display: none;">
+          <span>✕</span>
+          <span>Cancelar</span>
+        </button>
+        <button id="add-btn">
+          <span>+</span>
+          <span>Adicionar</span>
+        </button>
+      </div>
+    </div>
     
-    <div id="successMessage" class="success-message">
-      Macro salva com sucesso!
-    </div>
-
-    <div class="form-card">
-      <form id="macroForm">
-        <div class="form-group">
-          <label for="command">Comando</label>
-          <div class="input-with-icon">
-            <span class="input-icon">#</span>
-            <input 
-              type="text" 
-              id="command" 
-              placeholder="boasvindas" 
-              required
-              autocomplete="off"
-            >
-          </div>
+    <div class="macros-section">
+      <div class="section-header">
+        <div class="section-title">
+          <span>📝</span>
+          <span>Suas Macros</span>
+          <span class="macro-count" id="macro-count">0</span>
         </div>
-        
-        <div class="form-group">
-          <label for="message">Mensagem</label>
-          <textarea 
-            id="message" 
-            placeholder="Olá, tudo bem?" 
-            required
-          ></textarea>
-        </div>
-        
-        <div class="form-actions">
-          <button type="submit" class="btn" id="saveBtn">💾 Salvar Macro</button>
-          <button type="button" class="btn btn-cancel" id="cancelEditBtn" style="display: none;">❌ Cancelar</button>
-        </div>
-      </form>
-    </div>
-
-    <div class="macros-list">
-      <h2>📋 Macros Salvas</h2>
-      <div id="macrosList">
+        <button id="clear-all-btn" class="clear-all-btn" style="display: none;">
+          <span>🗑️</span>
+          <span>Limpar Tudo</span>
+        </button>
+      </div>
+      
+      <div id="macros-list">
         <div class="empty-state">
-          <div class="empty-state-icon">📝</div>
-          <p>Nenhuma macro salva ainda.<br>Crie sua primeira macro acima!</p>
+          <div class="empty-state-icon">💬</div>
+          <div class="empty-state-text">
+            Nenhuma macro criada ainda.<br>
+            Comece adicionando uma acima!
+          </div>
         </div>
       </div>
     </div>
   </div>
-
+  
   <script src="popup.js"></script>
 </body>
 </html>
