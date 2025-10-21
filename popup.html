@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Macro Assistant</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      width: 400px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #ffffff;
+      color: #333;
+    }
+
+    .container {
+      padding: 20px;
+    }
+
+    h1 {
+      font-size: 22px;
+      color: #ffb3ed;
+      margin-bottom: 20px;
+      text-align: center;
+      font-weight: 600;
+      letter-spacing: -0.5px;
+    }
+
+    .form-card {
+      background: #ffffff;
+      border: 1px solid #ffecfb;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    .form-group {
+      margin-bottom: 12px;
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      color: #ffb3ed;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .input-with-icon {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .input-icon {
+      position: absolute;
+      left: 12px;
+      color: #ffb3ed;
+      font-size: 16px;
+      font-weight: 600;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    input[type="text"],
+    textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #ffd9f6;
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: inherit;
+      transition: all 0.2s ease;
+      background: #ffffff;
+    }
+
+    #command {
+      padding-left: 30px;
+    }
+
+    input[type="text"]:focus,
+    textarea:focus {
+      outline: none;
+      border-color: #ffc6f2;
+      background: #ffecfb;
+    }
+
+    input[type="text"]:disabled {
+      background: #ffecfb;
+      color: #999;
+      cursor: not-allowed;
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 70px;
+    }
+
+    .form-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 10px;
+      background: #ffb3ed;
+      color: #ffffff;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn:hover {
+      background: #ffc6f2;
+      transform: translateY(-1px);
+    }
+
+    .btn:active {
+      transform: translateY(0);
+    }
+
+    .btn-cancel {
+      background: #ffd9f6;
+      color: #ffb3ed;
+    }
+
+    .btn-cancel:hover {
+      background: #ffc6f2;
+      color: #ffffff;
+    }
+
+    .macros-list {
+      background: #ffffff;
+      border: 1px solid #ffecfb;
+      border-radius: 8px;
+      padding: 16px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    .macros-list h2 {
+      font-size: 12px;
+      color: #ffb3ed;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #ffecfb;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 500;
+    }
+
+    .macro-item {
+      background: #ffecfb;
+      border-radius: 6px;
+      padding: 10px;
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: start;
+      transition: all 0.2s ease;
+      border: 1px solid transparent;
+    }
+
+    .macro-item:hover {
+      background: #ffd9f6;
+      border-color: #ffc6f2;
+    }
+
+    .macro-content {
+      flex: 1;
+    }
+
+    .macro-command {
+      font-weight: 600;
+      color: #ffb3ed;
+      font-size: 13px;
+      margin-bottom: 4px;
+    }
+
+    .macro-message {
+      font-size: 12px;
+      color: #666;
+      word-break: break-word;
+      line-height: 1.4;
+    }
+
+    .macro-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-left: 8px;
+    }
+
+    .edit-btn,
+    .delete-btn {
+      color: #ffb3ed;
+      border: 1px solid #ffc6f2;
+      background: #ffffff;
+      border-radius: 4px;
+      padding: 4px 10px;
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+      font-weight: 500;
+    }
+
+    .edit-btn:hover {
+      background: #ffb3ed;
+      color: #ffffff;
+      border-color: #ffb3ed;
+    }
+
+    .delete-btn:hover {
+      background: #ffc6f2;
+      color: #ffffff;
+      border-color: #ffc6f2;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 30px 20px;
+      color: #ffc6f2;
+      font-size: 13px;
+    }
+
+    .empty-state-icon {
+      font-size: 40px;
+      margin-bottom: 8px;
+      opacity: 0.6;
+    }
+
+    .success-message {
+      background: #ffecfb;
+      color: #ffb3ed;
+      padding: 10px;
+      border-radius: 6px;
+      text-align: center;
+      margin-bottom: 12px;
+      font-size: 12px;
+      font-weight: 500;
+      display: none;
+      animation: slideDown 0.3s ease;
+      border: 1px solid #ffd9f6;
+    }
+
+    @keyframes slideDown {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .success-message.show {
+      display: block;
+    }
+
+    /* Scrollbar personalizado */
+    .macros-list::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .macros-list::-webkit-scrollbar-track {
+      background: #ffecfb;
+      border-radius: 3px;
+    }
+
+    .macros-list::-webkit-scrollbar-thumb {
+      background: #ffc6f2;
+      border-radius: 3px;
+    }
+
+    .macros-list::-webkit-scrollbar-thumb:hover {
+      background: #ffb3ed;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Macro Assistant</h1>
+    
+    <div id="successMessage" class="success-message">
+      Macro salva com sucesso!
+    </div>
+
+    <div class="form-card">
+      <form id="macroForm">
+        <div class="form-group">
+          <label for="command">Comando</label>
+          <div class="input-with-icon">
+            <span class="input-icon">#</span>
+            <input 
+              type="text" 
+              id="command" 
+              placeholder="boasvindas" 
+              required
+              autocomplete="off"
+            >
+          </div>
+        </div>
+        
+        <div class="form-group">
+          <label for="message">Mensagem</label>
+          <textarea 
+            id="message" 
+            placeholder="Olá, tudo bem?" 
+            required
+          ></textarea>
+        </div>
+        
+        <div class="form-actions">
+          <button type="submit" class="btn" id="saveBtn">💾 Salvar Macro</button>
+          <button type="button" class="btn btn-cancel" id="cancelEditBtn" style="display: none;">❌ Cancelar</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="macros-list">
+      <h2>📋 Macros Salvas</h2>
+      <div id="macrosList">
+        <div class="empty-state">
+          <div class="empty-state-icon">📝</div>
+          <p>Nenhuma macro salva ainda.<br>Crie sua primeira macro acima!</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
