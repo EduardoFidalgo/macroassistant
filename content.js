@@ -568,7 +568,19 @@
       deleteRange.setStart(textNode, startPos);
       deleteRange.setEnd(textNode, cursorPos);
       selection.removeAllRanges();
-      selection.addRange(deleteRange);
+      
+      // Validar que o nó está no documento antes de adicionar range
+      if (!document.contains(textNode)) {
+        log('⚠️ Nó de texto não está no documento');
+        return false;
+      }
+      
+      try {
+        selection.addRange(deleteRange);
+      } catch (e) {
+        log('⚠️ Erro ao adicionar deleteRange:', e.message);
+        return false;
+      }
       
       log('🗑️ Deletando comando...');
       
@@ -619,7 +631,15 @@
         insertRange.setStart(newTextNode, 0);
         insertRange.setEnd(newTextNode, 0);
         selection.removeAllRanges();
-        selection.addRange(insertRange);
+        
+        // Validar que o nó está no documento antes de adicionar range
+        if (newTextNode.parentNode && document.contains(newTextNode)) {
+          try {
+            selection.addRange(insertRange);
+          } catch (e) {
+            log('⚠️ Erro ao adicionar range (novo nó):', e.message);
+          }
+        }
         
         log('📝 Inserindo texto:', replacementText);
         
@@ -637,12 +657,18 @@
         const textNodeToInsert = document.createTextNode(replacementText);
         insertRange.insertNode(textNodeToInsert);
         
-        // Posicionar cursor após o texto inserido
-        const finalRange = document.createRange();
-        finalRange.setStartAfter(textNodeToInsert);
-        finalRange.setEndAfter(textNodeToInsert);
-        selection.removeAllRanges();
-        selection.addRange(finalRange);
+        // Posicionar cursor após o texto inserido - validar novamente
+        if (textNodeToInsert.parentNode && document.contains(textNodeToInsert)) {
+          try {
+            const finalRange = document.createRange();
+            finalRange.setStartAfter(textNodeToInsert);
+            finalRange.setEndAfter(textNodeToInsert);
+            selection.removeAllRanges();
+            selection.addRange(finalRange);
+          } catch (e) {
+            log('⚠️ Erro ao posicionar cursor (novo nó):', e.message);
+          }
+        }
         
       } else {
         // Nó original ainda existe, usar ele
@@ -650,7 +676,15 @@
         insertRange.setStart(textNode, startPos);
         insertRange.setEnd(textNode, startPos);
         selection.removeAllRanges();
-        selection.addRange(insertRange);
+        
+        // Validar que o nó ainda está no documento
+        if (document.contains(textNode)) {
+          try {
+            selection.addRange(insertRange);
+          } catch (e) {
+            log('⚠️ Erro ao adicionar range (nó original):', e.message);
+          }
+        }
         
         log('📝 Inserindo texto:', replacementText);
         
@@ -668,12 +702,18 @@
         const textNodeToInsert = document.createTextNode(replacementText);
         insertRange.insertNode(textNodeToInsert);
         
-        // Posicionar cursor após o texto inserido
-        const finalRange = document.createRange();
-        finalRange.setStartAfter(textNodeToInsert);
-        finalRange.setEndAfter(textNodeToInsert);
-        selection.removeAllRanges();
-        selection.addRange(finalRange);
+        // Posicionar cursor após o texto inserido - validar novamente
+        if (textNodeToInsert.parentNode && document.contains(textNodeToInsert)) {
+          try {
+            const finalRange = document.createRange();
+            finalRange.setStartAfter(textNodeToInsert);
+            finalRange.setEndAfter(textNodeToInsert);
+            selection.removeAllRanges();
+            selection.addRange(finalRange);
+          } catch (e) {
+            log('⚠️ Erro ao posicionar cursor (nó original):', e.message);
+          }
+        }
       }
       
       // Eventos finais após inserção
