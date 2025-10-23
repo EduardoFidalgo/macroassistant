@@ -1,412 +1,1435 @@
 // ==============================================
-// MACRO ASSISTANT - Clipboard Mode (Minimalista)
+// MACRO ASSISTANT - Universal Input Monitor
+// Version 3.2.1 - Melhorado e Otimizado
 // ==============================================
 
-let macros = {};
-let buffer = '';
-let capturing = false;
-let processing = false; // Flag para evitar processamento duplo
+(() => {
+  'use strict';
 
-// Carregar macros
-chrome.storage.local.get(['macros'], (result) => {
-  macros = result.macros || {};
-});
+  // ==============================================
+  // STATE MANAGEMENT
+  // ==============================================
+  const state = {
+    macros: {},
+    activeElement: null,
+    inputBuffer: new Map(),
+    isProcessing: false,
+    lastExpansion: 0,
+    lastReplacementText: null,
+    lastReplacementElement: null,
+    lastReplacementTime: 0
+  };
 
-chrome.storage.onChanged.addListener((changes) => {
-  if (changes.macros) macros = changes.macros.newValue || {};
-});
+  // ==============================================
+  // CONFIGURATION
+  // ==============================================
+  const config = {
+    triggerChar: '#',
+    minDelay: 100,
+    notificationDuration: 2500,
+    debugMode: true
+  };
 
-// Copiar para clipboard
-function copyToClipboard(text) {
-  const textarea = document.createElement('textarea');
-  textarea.value = text;
-  textarea.style.position = 'fixed';
-  textarea.style.opacity = '0';
-  document.body.appendChild(textarea);
-  textarea.select();
-  document.execCommand('copy');
-  document.body.removeChild(textarea);
-}
+  // ==============================================
+  // UTILITY FUNCTIONS
+  // ==============================================
+  const log = (...args) => {
+    if (config.debugMode) console.log('[MacroAssistant]', ...args);
+  };
 
-// Substituir comando pelo texto da macro com suporte a React
-function replaceCommandWithMacro(targetElement, command, macroText) {
-  if (!targetElement) return false;
-  
-  // INPUT ou TEXTAREA
-  if (targetElement.tagName === 'INPUT' || targetElement.tagName === 'TEXTAREA') {
-    const currentValue = targetElement.value;
-    const commandIndex = currentValue.lastIndexOf(command);
+  const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+  const getElementBuffer = (element) => {
+    if (!state.inputBuffer.has(element)) {
+      state.inputBuffer.set(element, '');
+    }
+    return state.inputBuffer.get(element);
+  };
+
+  const setElementBuffer = (element, value) => {
+    state.inputBuffer.set(element, value);
+  };
+
+  const clearElementBuffer = (element) => {
+    state.inputBuffer.delete(element);
+  };
+
+  // ==============================================
+  // STORAGE MANAGEMENT
+  // ==============================================
+  const loadMacros = () => {
+    if (typeof chrome === 'undefined' || !chrome.storage) {
+      log('⚠️ Chrome storage API não disponível');
+      return;
+    }
     
-    if (commandIndex !== -1) {
-      // Calcular novo valor
-      const beforeCommand = currentValue.substring(0, commandIndex);
-      const afterCommand = currentValue.substring(commandIndex + command.length);
-      const newValue = beforeCommand + macroText + afterCommand;
+    try {
+      chrome.storage.local.get(['macros'], (result) => {
+        if (chrome.runtime.lastError) {
+          log('❌ Erro ao carregar macros:', chrome.runtime.lastError);
+          return;
+        }
+        state.macros = result.macros || {};
+        log('✅ Macros carregadas:', Object.keys(state.macros).length);
+      });
+    } catch (error) {
+      log('❌ Erro ao acessar storage:', error);
+    }
+  };
+
+  // Configurar listener para mudanças com validação
+  if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
+    chrome.storage.onChanged.addListener((changes) => {
+      try {
+        if (changes.macros) {
+          state.macros = changes.macros.newValue || {};
+          log('🔄 Macros atualizadas:', Object.keys(state.macros).length);
+        }
+      } catch (error) {
+        log('❌ Erro ao processar mudanças:', error);
+      }
+    });
+  }
+
+  // ==============================================
+  // SLATE/RICH EDITOR DETECTION
+  // ==============================================
+  const isSlateEditor = (element) => {
+    if (!element) return false;
+    if (element.hasAttribute('data-slate-editor') ||
+        element.hasAttribute('data-lexical-editor') ||
+        element.getAttribute('role') === 'textbox') {
+      return true;
+    }
+
+    let current = element;
+    while (current && current !== document.body) {
+      if (current.hasAttribute('data-slate-editor') ||
+          current.hasAttribute('data-lexical-editor') ||
+          current.classList?.contains('slate-editor') ||
+          current.classList?.contains('lexical-editor')) {
+        return true;
+      }
+      current = current.parentElement;
+    }
+    return false;
+  };
+
+  const getSlateEditor = (element) => {
+    let current = element;
+    while (current && current !== document.body) {
+      if (current.hasAttribute('data-slate-editor')) return current;
+      current = current.parentElement;
+    }
+    return null;
+  };
+
+  // ==============================================
+  // ELEMENT DETECTION - Universal
+  // ==============================================
+  const isEditableElement = (element) => {
+    if (!element || !element.tagName) return false;
+
+    const tag = element.tagName.toLowerCase();
+    if (tag === 'input') {
+      const type = (element.type || '').toLowerCase();
+      return !['checkbox', 'radio', 'submit', 'button', 'file', 'image', 'reset', 'hidden'].includes(type);
+    }
+    if (tag === 'textarea') return !element.disabled && !element.readOnly;
+    if (element.isContentEditable || element.contentEditable === 'true') return true;
+    if (element.ownerDocument?.designMode === 'on') return true;
+    return false;
+  };
+
+  const getEditableType = (element) => {
+    if (!element) return null;
+    const tag = element.tagName.toLowerCase();
+    if (tag === 'input') return 'input';
+    if (tag === 'textarea') return 'textarea';
+    if (element.isContentEditable || element.contentEditable === 'true') return 'contenteditable';
+    return null;
+  };
+
+  // ==============================================
+  // SLATE VALUE EXTRACTION (Real value getter)
+  // ==============================================
+  const extractSlateValue = (element) => {
+    try {
+      const root = getSlateEditor(element);
+      if (!root) return null;
       
-      console.log('🔍 Debug INPUT/TEXTAREA:');
-      console.log('  Valor atual:', currentValue);
-      console.log('  Comando:', command);
-      console.log('  Texto macro:', macroText);
-      console.log('  Antes:', beforeCommand);
-      console.log('  Depois:', afterCommand);
-      console.log('  Novo valor:', newValue);
+      // Tentar encontrar React Fiber
+      const fiberKey = Object.keys(root).find(k => 
+        k.startsWith("__reactFiber$") || k.startsWith("__reactInternalInstance$")
+      );
       
-      // MÉTODO 1: Setter nativo (para React)
-      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-        targetElement.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype,
+      if (!fiberKey) return null;
+      
+      const fiber = root[fiberKey];
+      if (!fiber) return null;
+      
+      return findSlateValueInFiber(fiber);
+    } catch (err) {
+      log("⚠️ Falha ao extrair valor Slate:", err);
+      return null;
+    }
+  };
+
+  const findSlateValueInFiber = (fiber) => {
+    const visited = new Set();
+    const stack = [fiber];
+    let iterations = 0;
+    const MAX_ITERATIONS = 500; // Prevenir loop infinito
+    
+    while (stack.length && iterations < MAX_ITERATIONS) {
+      iterations++;
+      const node = stack.pop();
+      
+      if (!node || visited.has(node)) continue;
+      visited.add(node);
+
+      // Verificar se tem valor Slate
+      if (node.memoizedProps?.value && Array.isArray(node.memoizedProps.value)) {
+        return serializeSlateNodes(node.memoizedProps.value);
+      }
+      
+      // Verificar também em stateNode
+      if (node.stateNode?.value && Array.isArray(node.stateNode.value)) {
+        return serializeSlateNodes(node.stateNode.value);
+      }
+      
+      // Adicionar nós relacionados
+      if (node.child) stack.push(node.child);
+      if (node.sibling) stack.push(node.sibling);
+      if (node.return) stack.push(node.return);
+    }
+    
+    return null;
+  };
+
+  const serializeSlateNodes = (nodes) => {
+    if (!Array.isArray(nodes)) return "";
+    
+    return nodes.map(n => {
+      if (!n) return "";
+      if (typeof n.text === 'string') return n.text;
+      if (Array.isArray(n.children)) return serializeSlateNodes(n.children);
+      return "";
+    }).join("");
+  };
+
+  // ==============================================
+  // TEXT EXTRACTION - Universal + Slate support
+  // ==============================================
+  const getCurrentText = (element) => {
+    const type = getEditableType(element);
+    if (type === 'input' || type === 'textarea') return element.value || '';
+    if (type === 'contenteditable') {
+      if (isSlateEditor(element)) {
+        const slateValue = extractSlateValue(element);
+        if (slateValue) return slateValue;
+      }
+      return element.innerText || element.textContent || '';
+    }
+    return '';
+  };
+
+  const getCursorPosition = (element) => {
+    const type = getEditableType(element);
+    if (type === 'input' || type === 'textarea') return element.selectionStart || 0;
+    if (type === 'contenteditable') {
+      const sel = window.getSelection();
+      if (sel.rangeCount > 0) {
+        const range = sel.getRangeAt(0);
+        const pre = range.cloneRange();
+        pre.selectNodeContents(element);
+        pre.setEnd(range.endContainer, range.endOffset);
+        return pre.toString().length;
+      }
+    }
+    return 0;
+  };
+
+  // ==============================================
+  // SLATE EDITOR MANIPULATION
+  // ==============================================
+  const replaceTextInSlate = async (element, command, replacementText) => {
+    log('🎨 Detectado editor Slate/Rich, usando métodos especializados');
+    
+    // Tentar múltiplos métodos em sequência até um funcionar
+    const methods = [
+      { name: 'Agressivo (DOM direto)', fn: () => replaceTextSlateAggressive(element, command, replacementText) },
+      { name: 'Clipboard', fn: () => replaceTextViaClipboard(element, command, replacementText) },
+      { name: 'InputEvent', fn: () => replaceTextSlateInputEvent(element, command, replacementText) },
+      { name: 'ExecCommand', fn: () => replaceTextSlateExecCommand(element, command, replacementText) }
+    ];
+    
+    for (const method of methods) {
+      try {
+        log(`🔄 Tentando método: ${method.name}`);
+        const success = await method.fn();
+        
+        if (success) {
+          log(`✅ Sucesso com método: ${method.name}`);
+          return true;
+        }
+        
+        log(`⚠️ Método ${method.name} não funcionou, tentando próximo...`);
+        await sleep(50);
+        
+      } catch (error) {
+        log(`❌ Erro no método ${method.name}:`, error);
+      }
+    }
+    
+    log('❌ Todos os métodos Slate falharam');
+    return false;
+  };
+
+  const replaceTextSlateInputEvent = async (element, command, replacementText) => {
+    try {
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0) return false;
+      
+      const range = selection.getRangeAt(0);
+      
+      // Obter texto atual
+      const textNode = range.startContainer;
+      if (textNode.nodeType !== Node.TEXT_NODE) return false;
+      
+      const textContent = textNode.textContent || '';
+      const cursorPos = range.startOffset;
+      
+      // Usar o tamanho exato do comando
+      const commandLength = command.length;
+      const startPos = Math.max(0, cursorPos - commandLength);
+      
+      // Validar se o texto é realmente o comando
+      const textInRange = textContent.substring(startPos, cursorPos);
+      if (textInRange !== command) {
+        log('⚠️ Texto não corresponde ao comando:', textInRange, 'vs', command);
+        return false;
+      }
+      
+      // Criar novo range que seleciona o comando
+      const deleteRange = document.createRange();
+      deleteRange.setStart(textNode, startPos);
+      deleteRange.setEnd(textNode, cursorPos);
+      
+      // Selecionar o comando
+      selection.removeAllRanges();
+      selection.addRange(deleteRange);
+      
+      await sleep(10);
+      
+      // Disparar evento de beforeinput para deleção
+      element.dispatchEvent(new InputEvent('beforeinput', {
+        bubbles: true,
+        cancelable: true,
+        inputType: 'deleteContentBackward',
+        data: null
+      }));
+      
+      // Deletar o conteúdo selecionado
+      deleteRange.deleteContents();
+      
+      // Disparar input após deleção
+      element.dispatchEvent(new InputEvent('input', {
+        bubbles: true,
+        cancelable: false,
+        inputType: 'deleteContentBackward'
+      }));
+      
+      await sleep(50);
+      
+      // Verificar se o nó de texto ainda existe
+      if (!textNode.parentNode) return false;
+      
+      // Inserir o texto de substituição
+      const insertRange = document.createRange();
+      insertRange.setStart(textNode, startPos);
+      insertRange.setEnd(textNode, startPos);
+      selection.removeAllRanges();
+      selection.addRange(insertRange);
+      
+      // Disparar beforeinput para inserção
+      element.dispatchEvent(new InputEvent('beforeinput', {
+        bubbles: true,
+        cancelable: true,
+        inputType: 'insertText',
+        data: replacementText
+      }));
+      
+      // Inserir o texto
+      const newTextNode = document.createTextNode(replacementText);
+      insertRange.insertNode(newTextNode);
+      
+      // Mover cursor
+      insertRange.setStartAfter(newTextNode);
+      insertRange.setEndAfter(newTextNode);
+      selection.removeAllRanges();
+      selection.addRange(insertRange);
+      
+      // Disparar input
+      element.dispatchEvent(new InputEvent('input', {
+        bubbles: true,
+        cancelable: false,
+        inputType: 'insertText',
+        data: replacementText
+      }));
+      
+      return true;
+      
+    } catch (error) {
+      log('❌ Erro no InputEvent:', error);
+      return false;
+    }
+  };
+
+  const replaceTextSlateExecCommand = async (element, command, replacementText) => {
+    try {
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0) return false;
+      
+      const range = selection.getRangeAt(0);
+      const textNode = range.startContainer;
+      
+      if (textNode.nodeType !== Node.TEXT_NODE) return false;
+      
+      const textContent = textNode.textContent || '';
+      const cursorPos = range.startOffset;
+      
+      // Usar o tamanho exato do comando
+      const commandLength = command.length;
+      if (commandLength <= 0) return false;
+      
+      // Selecionar comando usando modify
+      for (let i = 0; i < commandLength; i++) {
+        selection.modify('extend', 'backward', 'character');
+      }
+      
+      await sleep(10);
+      
+      // Verificar se document.execCommand é suportado
+      if (!document.execCommand) {
+        log('⚠️ execCommand não suportado');
+        return false;
+      }
+      
+      // Usar execCommand para deletar e inserir
+      document.execCommand('delete', false, null);
+      
+      await sleep(50);
+      
+      document.execCommand('insertText', false, replacementText);
+      
+      return true;
+      
+    } catch (error) {
+      log('❌ Erro no ExecCommand:', error);
+      return false;
+    }
+  };
+
+  const replaceTextViaClipboard = async (element, command, replacementText) => {
+    log('📋 Tentando método via clipboard');
+    
+    try {
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0) return false;
+      
+      const range = selection.getRangeAt(0);
+      
+      // Obter texto atual
+      const textNode = range.startContainer;
+      if (textNode.nodeType !== Node.TEXT_NODE) return false;
+      
+      const textContent = textNode.textContent || '';
+      const cursorPos = range.startOffset;
+      
+      // Usar o tamanho exato do comando
+      const commandLength = command.length;
+      const startPos = Math.max(0, cursorPos - commandLength);
+      
+      // Validar se o texto é realmente o comando
+      const textInRange = textContent.substring(startPos, cursorPos);
+      if (textInRange !== command) {
+        log('⚠️ Texto não corresponde:', textInRange, 'vs', command);
+        return false;
+      }
+      
+      // Selecionar comando
+      const deleteRange = document.createRange();
+      deleteRange.setStart(textNode, startPos);
+      deleteRange.setEnd(textNode, cursorPos);
+      selection.removeAllRanges();
+      selection.addRange(deleteRange);
+      
+      // Copiar texto para clipboard
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(replacementText);
+      } else {
+        // Fallback se clipboard API não disponível
+        return false;
+      }
+      
+      await sleep(50);
+      
+      // Criar DataTransfer com dados
+      const dataTransfer = new DataTransfer();
+      dataTransfer.setData('text/plain', replacementText);
+      
+      // Simular evento paste
+      const pasteEvent = new ClipboardEvent('paste', {
+        bubbles: true,
+        cancelable: true,
+        clipboardData: dataTransfer
+      });
+      
+      element.dispatchEvent(pasteEvent);
+      
+      // Se o evento não foi cancelado, inserir manualmente
+      if (!pasteEvent.defaultPrevented) {
+        document.execCommand('insertText', false, replacementText);
+      }
+      
+      log('✅ Texto inserido via clipboard');
+      return true;
+      
+    } catch (error) {
+      log('❌ Erro no método clipboard:', error);
+      return false;
+    }
+  };
+
+  // Método mais agressivo: Manipular diretamente o DOM e forçar reconciliação
+  const replaceTextSlateAggressive = async (element, command, replacementText) => {
+    log('💪 Tentando método agressivo para Slate');
+    
+    try {
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0) {
+        log('⚠️ Nenhuma seleção disponível');
+        return false;
+      }
+      
+      const range = selection.getRangeAt(0);
+      const textNode = range.startContainer;
+      
+      if (textNode.nodeType !== Node.TEXT_NODE) {
+        log('⚠️ Nó atual não é texto');
+        return false;
+      }
+      
+      const textContent = textNode.textContent || '';
+      const cursorPos = range.startOffset;
+      
+      // Usar o tamanho exato do comando
+      const commandLength = command.length;
+      const startPos = Math.max(0, cursorPos - commandLength);
+      
+      // Validar se o texto é realmente o comando
+      const textInRange = textContent.substring(startPos, cursorPos);
+      if (textInRange !== command) {
+        log('⚠️ Texto não corresponde:', textInRange, 'vs', command);
+        return false;
+      }
+      
+      log('📍 Comando encontrado entre', startPos, 'e', cursorPos);
+      log('📝 Conteúdo original:', textContent);
+      
+      // ETAPA 1: Deletar o comando primeiro
+      // Selecionar o range do comando
+      const deleteRange = document.createRange();
+      deleteRange.setStart(textNode, startPos);
+      deleteRange.setEnd(textNode, cursorPos);
+      selection.removeAllRanges();
+      selection.addRange(deleteRange);
+      
+      log('🗑️ Deletando comando...');
+      
+      // Disparar evento de deleção
+      element.dispatchEvent(new InputEvent('beforeinput', {
+        bubbles: true,
+        cancelable: true,
+        inputType: 'deleteContentBackward',
+        data: null
+      }));
+      
+      await sleep(5);
+      
+      // Deletar o conteúdo
+      deleteRange.deleteContents();
+      
+      element.dispatchEvent(new InputEvent('input', {
+        bubbles: true,
+        cancelable: false,
+        inputType: 'deleteContentBackward'
+      }));
+      
+      await sleep(10);
+      
+      log('✅ Comando deletado, conteúdo atual:', textNode.textContent);
+      
+      // ETAPA 2: Inserir o texto de substituição
+      // Posicionar cursor onde estava o comando
+      const insertRange = document.createRange();
+      insertRange.setStart(textNode, startPos);
+      insertRange.setEnd(textNode, startPos);
+      selection.removeAllRanges();
+      selection.addRange(insertRange);
+      
+      log('📝 Inserindo texto:', replacementText);
+      
+      // Disparar evento de inserção
+      element.dispatchEvent(new InputEvent('beforeinput', {
+        bubbles: true,
+        cancelable: true,
+        inputType: 'insertText',
+        data: replacementText
+      }));
+      
+      await sleep(5);
+      
+      // Inserir o texto
+      const textNodeToInsert = document.createTextNode(replacementText);
+      insertRange.insertNode(textNodeToInsert);
+      
+      // Posicionar cursor após o texto inserido
+      const finalRange = document.createRange();
+      finalRange.setStartAfter(textNodeToInsert);
+      finalRange.setEndAfter(textNodeToInsert);
+      selection.removeAllRanges();
+      selection.addRange(finalRange);
+      
+      element.dispatchEvent(new InputEvent('input', {
+        bubbles: true,
+        cancelable: false,
+        inputType: 'insertText',
+        data: replacementText
+      }));
+      
+      await sleep(10);
+      
+      element.dispatchEvent(new Event('change', { bubbles: true }));
+      
+      // Forçar reconciliação do React (se aplicável)
+      const slateEditor = getSlateEditor(element);
+      if (slateEditor) {
+        slateEditor.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      
+      log('✅ Texto forçado no DOM');
+      return true;
+      
+    } catch (error) {
+      log('❌ Erro no método agressivo:', error);
+      return false;
+    }
+  };
+
+  // ==============================================
+  // TEXT REPLACEMENT - Universal Method
+  // ==============================================
+  const replaceTextUniversal = async (element, command, replacementText) => {
+    const type = getEditableType(element);
+    
+    if (!type) {
+      log('❌ Elemento não editável');
+      return false;
+    }
+
+    // Verificar se é editor Slate/Rich
+    if (isSlateEditor(element)) {
+      return await replaceTextInSlate(element, command, replacementText);
+    }
+
+    try {
+      log('🔄 Deletando comando:', command);
+      
+      // Passo 1: Deletar comando
+      await deleteCommand(element, command, type);
+      
+      // Aguardar para garantir que a deleção foi processada
+      await new Promise(resolve => requestAnimationFrame(resolve));
+      await sleep(50);
+      
+      log('📝 Inserindo texto de substituição:', replacementText.substring(0, 50) + '...');
+      
+      // Passo 2: Inserir texto de substituição
+      const inserted = await insertText(element, replacementText, type);
+      
+      if (!inserted) {
+        log('⚠️ Método direto falhou, tentando fallback');
+        return await insertTextFallback(element, replacementText, type);
+      }
+      
+      // Aguardar para garantir que o texto foi inserido
+      await new Promise(resolve => requestAnimationFrame(resolve));
+      
+      log('✅ Substituição completa');
+      return true;
+      
+    } catch (error) {
+      log('❌ Erro na substituição:', error);
+      return await insertTextFallback(element, replacementText, type);
+    }
+  };
+
+  const deleteCommand = async (element, command, type) => {
+    const text = getCurrentText(element);
+    const cursorPos = getCursorPosition(element);
+    
+    log('🗑️ deleteCommand chamado:');
+    log('  - Comando:', command, '(tamanho:', command.length, ')');
+    log('  - Cursor em:', cursorPos);
+    log('  - Texto atual:', text.substring(Math.max(0, cursorPos - 20), cursorPos + 20));
+    
+    // Usar o tamanho exato do comando para garantir remoção completa
+    const commandLength = command.length;
+    const startPos = cursorPos - commandLength;
+    
+    log('  - StartPos calculado:', startPos, 'EndPos:', cursorPos);
+    
+    if (type === 'input' || type === 'textarea') {
+      // Método mais robusto: manipular diretamente o valor
+      const value = element.value;
+      
+      // Validar se o texto no range é realmente o comando
+      const textInRange = value.substring(startPos, cursorPos);
+      if (textInRange !== command) {
+        log('⚠️ AVISO: Texto no range não corresponde ao comando:', textInRange, 'vs', command);
+        log('📊 startPos:', startPos, 'cursorPos:', cursorPos, 'value:', value);
+        // Tentar encontrar o comando no texto
+        const commandIndex = value.lastIndexOf(command, cursorPos);
+        if (commandIndex !== -1 && commandIndex <= cursorPos) {
+          log('✅ Comando encontrado em:', commandIndex);
+          const realStartPos = commandIndex;
+          const realEndPos = commandIndex + commandLength;
+          const newValue = value.substring(0, realStartPos) + value.substring(realEndPos);
+          
+          // Usar o setter nativo para garantir compatibilidade
+          const setter = Object.getOwnPropertyDescriptor(
+            type === 'textarea' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype,
+            'value'
+          ).set;
+          
+          setter.call(element, newValue);
+          
+          // Disparar eventos nativos
+          element.dispatchEvent(new InputEvent('input', {
+            bubbles: true,
+            cancelable: true,
+            inputType: 'deleteContentBackward'
+          }));
+          
+          // Posicionar cursor no início onde estava o comando
+          element.setSelectionRange(realStartPos, realStartPos);
+          element.focus();
+          return;
+        }
+      }
+      
+      const newValue = value.substring(0, startPos) + value.substring(cursorPos);
+      
+      // Usar o setter nativo para garantir compatibilidade
+      const setter = Object.getOwnPropertyDescriptor(
+        type === 'textarea' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype,
         'value'
       ).set;
       
-      nativeInputValueSetter.call(targetElement, newValue);
+      setter.call(element, newValue);
       
-      // MÉTODO 2: Disparar evento de input (React detecta) - APENAS UMA VEZ
-      const inputEvent = new InputEvent('input', {
+      // Disparar eventos nativos
+      element.dispatchEvent(new InputEvent('input', {
         bubbles: true,
-        cancelable: false,
-        composed: true,
-        inputType: 'insertText'
-      });
-      targetElement.dispatchEvent(inputEvent);
-      
-      // Posicionar cursor (usar Array.from para contar emojis corretamente)
-      const beforeText = beforeCommand + macroText;
-      
-      // Usar length original para setSelectionRange (funciona com UTF-16)
-      const utf16CursorPos = beforeText.length;
-      targetElement.setSelectionRange(utf16CursorPos, utf16CursorPos);
-      
-      console.log('✅ Texto substituído com sucesso!');
-      console.log('✅ Comprimento final:', Array.from(newValue).length, 'caracteres');
-      console.log('✅ Parágrafos preservados:', (newValue.match(/\n/g) || []).length + 1);
-      
-      return true;
-    }
-  }
-  
-  // CONTENTEDITABLE (Discord, etc)
-  else if (targetElement.isContentEditable || targetElement.contentEditable === 'true') {
-    const currentText = targetElement.innerText || targetElement.textContent || '';
-    const commandIndex = currentText.lastIndexOf(command);
-    
-    if (commandIndex !== -1) {
-      // Focar no elemento
-      targetElement.focus();
-      
-      // Calcular novo texto
-      const beforeCommand = currentText.substring(0, commandIndex);
-      const afterCommand = currentText.substring(commandIndex + command.length);
-      const newText = beforeCommand + macroText + afterCommand;
-      
-      console.log('🔍 Debug CONTENTEDITABLE:');
-      console.log('  Texto atual:', currentText);
-      console.log('  Comando:', command);
-      console.log('  Texto macro:', macroText);
-      console.log('  Emojis na macro:', (macroText.match(/[\u{1F300}-\u{1F9FF}]/gu) || []).length);
-      console.log('  Parágrafos na macro:', (macroText.match(/\n/g) || []).length + 1);
-      
-      // MÉTODO 1: Deletar caractere por caractere (simula usuário apagando)
-      // Usar comprimento UTF-16 para cálculos do DOM (emojis = múltiplos chars)
-      const commandLengthUTF16 = command.length;
-      
-      // Posicionar cursor no final do comando
-      const selection = window.getSelection();
-      const range = document.createRange();
-      
-      // Selecionar todo o conteúdo primeiro
-      range.selectNodeContents(targetElement);
-      const allText = range.toString();
-      
-      // Encontrar posição do comando
-      let charCount = 0;
-      let foundStart = false;
-      let startNode = null, startOffset = 0;
-      let endNode = null, endOffset = 0;
-      
-      function traverseNodes(node) {
-        if (foundStart && endNode) return;
-        
-        if (node.nodeType === Node.TEXT_NODE) {
-          const textLength = node.textContent.length;
-          
-          if (!foundStart) {
-            if (charCount + textLength >= commandIndex) {
-              startNode = node;
-              startOffset = commandIndex - charCount;
-              foundStart = true;
-            }
-          }
-          
-          if (foundStart && !endNode) {
-            // Usar o comprimento UTF-16 para cálculos de offset no DOM
-            const endPos = commandIndex + commandLengthUTF16;
-            if (charCount + textLength >= endPos) {
-              endNode = node;
-              endOffset = endPos - charCount;
-            }
-          }
-          
-          charCount += textLength;
-        } else {
-          for (let child of node.childNodes) {
-            traverseNodes(child);
-            if (foundStart && endNode) break;
-          }
-        }
-      }
-      
-      traverseNodes(targetElement);
-      
-      if (startNode && endNode) {
-        // Selecionar o comando
-        range.setStart(startNode, startOffset);
-        range.setEnd(endNode, endOffset);
-        selection.removeAllRanges();
-        selection.addRange(range);
-        
-        // Disparar beforeinput APENAS UMA VEZ para deletar
-        targetElement.dispatchEvent(new InputEvent('beforeinput', {
-          inputType: 'deleteContentBackward',
-          bubbles: true,
-          cancelable: true
-        }));
-        
-        // Deletar seleção
-        document.execCommand('delete', false, null);
-        
-        // INSERIR TEXTO - Tratar múltiplos parágrafos
-        // Dividir por quebras de linha e inserir linha por linha
-        const lines = macroText.split('\n');
-        
-        // Disparar beforeinput UMA VEZ ANTES do loop
-        targetElement.dispatchEvent(new InputEvent('beforeinput', {
-          inputType: 'insertText',
-          data: macroText,
-          bubbles: true,
-          cancelable: true
-        }));
-        
-        for (let i = 0; i < lines.length; i++) {
-          const line = lines[i];
-          
-          // Inserir linha (suporta emojis automaticamente) - SEM disparar eventos individuais
-          document.execCommand('insertText', false, line);
-          
-          // Se não for a última linha, inserir quebra de linha
-          if (i < lines.length - 1) {
-            document.execCommand('insertLineBreak', false, null);
-          }
-        }
-        
-        // Disparar input APENAS UMA VEZ após todo o texto ser inserido
-        targetElement.dispatchEvent(new InputEvent('input', {
-          inputType: 'insertText',
-          data: macroText,
-          bubbles: true,
-          cancelable: false
-        }));
-        
-        console.log('✅ ContentEditable atualizado com sucesso!');
-        console.log('✅ Linhas inseridas:', lines.length);
-        
-        return true;
-      }
-      
-      // Fallback: Método simplificado
-      console.warn('⚠️ Usando fallback para contentEditable');
-      
-      targetElement.focus();
-      selection.removeAllRanges();
-      
-      // Selecionar tudo e substituir
-      const selectAllRange = document.createRange();
-      selectAllRange.selectNodeContents(targetElement);
-      selection.addRange(selectAllRange);
-      document.execCommand('delete', false, null);
-      
-      // Inserir novo texto com quebras de linha preservadas
-      const fallbackLines = newText.split('\n');
-      for (let i = 0; i < fallbackLines.length; i++) {
-        document.execCommand('insertText', false, fallbackLines[i]);
-        if (i < fallbackLines.length - 1) {
-          document.execCommand('insertLineBreak', false, null);
-        }
-      }
-      
-      // Disparar evento UMA ÚNICA VEZ ao final
-      targetElement.dispatchEvent(new InputEvent('input', { 
-        bubbles: true, 
-        cancelable: false,
-        inputType: 'insertText',
-        data: newText
+        cancelable: true,
+        inputType: 'deleteContentBackward'
       }));
       
-      console.log('✅ Fallback concluído');
+      // Posicionar cursor no início onde estava o comando
+      element.setSelectionRange(startPos, startPos);
+      
+      // Garantir foco
+      element.focus();
+      
+    } else if (type === 'contenteditable') {
+      const selection = window.getSelection();
+      
+      if (selection.rangeCount === 0) return;
+      
+      const range = selection.getRangeAt(0);
+      const textNode = range.startContainer;
+      
+      // Se estiver em um nó de texto
+      if (textNode.nodeType === Node.TEXT_NODE) {
+        const offset = range.startOffset;
+        const textContent = textNode.textContent || '';
+        
+        // Usar o tamanho exato do comando
+        const localStart = Math.max(0, offset - commandLength);
+        
+        // Validar se o texto no range é realmente o comando
+        const textInRange = textContent.substring(localStart, offset);
+        if (textInRange !== command) {
+          log('⚠️ Texto no range não corresponde ao comando:', textInRange, 'vs', command);
+        }
+        
+        // Deletar o comando usando o tamanho exato
+        const newText = textContent.substring(0, localStart) + textContent.substring(offset);
+        textNode.textContent = newText;
+        
+        // Reposicionar cursor
+        try {
+          range.setStart(textNode, localStart);
+          range.setEnd(textNode, localStart);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        } catch (e) {
+          log('⚠️ Erro ao reposicionar cursor:', e);
+        }
+        
+      } else {
+        // Fallback: usar execCommand com o tamanho exato
+        for (let i = 0; i < commandLength; i++) {
+          selection.modify('move', 'backward', 'character');
+        }
+        
+        for (let i = 0; i < commandLength; i++) {
+          selection.modify('extend', 'forward', 'character');
+        }
+        
+        document.execCommand('delete');
+      }
+      
+      // Disparar evento de input
+      element.dispatchEvent(new InputEvent('input', {
+        bubbles: true,
+        inputType: 'deleteContentBackward'
+      }));
+    }
+  };
+
+  const insertText = async (element, text, type) => {
+    if (type === 'input' || type === 'textarea') {
+      // Método direto e robusto
+      const start = element.selectionStart || 0;
+      const end = element.selectionEnd || 0;
+      const value = element.value || '';
+      
+      const newValue = value.substring(0, start) + text + value.substring(end);
+      
+      // Usar setter nativo
+      const setter = Object.getOwnPropertyDescriptor(
+        type === 'textarea' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype,
+        'value'
+      ).set;
+      
+      setter.call(element, newValue);
+      
+      // Disparar eventos na ordem correta
+      element.dispatchEvent(new InputEvent('beforeinput', {
+        bubbles: true,
+        cancelable: true,
+        inputType: 'insertText',
+        data: text
+      }));
+      
+      element.dispatchEvent(new InputEvent('input', {
+        bubbles: true,
+        cancelable: false,
+        inputType: 'insertText',
+        data: text
+      }));
+      
+      element.dispatchEvent(new Event('change', { bubbles: true }));
+      
+      // Posicionar cursor no final do texto inserido
+      const newPos = start + text.length;
+      element.setSelectionRange(newPos, newPos);
+      
+      // Garantir foco
+      element.focus();
+      
+      log('✅ Texto inserido:', text.substring(0, 50) + (text.length > 50 ? '...' : ''));
+      
+      return true;
+      
+    } else if (type === 'contenteditable') {
+      const selection = window.getSelection();
+      
+      if (selection.rangeCount === 0) {
+        log('⚠️ Nenhum range selecionado');
+        return false;
+      }
+      
+      const range = selection.getRangeAt(0);
+      
+      // Deletar seleção atual se houver
+      range.deleteContents();
+      
+      // Criar fragmento de texto
+      const lines = text.split('\n');
+      const fragment = document.createDocumentFragment();
+      
+      for (let i = 0; i < lines.length; i++) {
+        const textNode = document.createTextNode(lines[i]);
+        fragment.appendChild(textNode);
+        
+        if (i < lines.length - 1) {
+          fragment.appendChild(document.createElement('br'));
+        }
+      }
+      
+      // Inserir fragmento
+      range.insertNode(fragment);
+      
+      // Mover cursor para o final do texto inserido
+      range.setStartAfter(fragment.lastChild);
+      range.setEndAfter(fragment.lastChild);
+      selection.removeAllRanges();
+      selection.addRange(range);
+      
+      // Disparar eventos
+      element.dispatchEvent(new InputEvent('beforeinput', {
+        bubbles: true,
+        cancelable: true,
+        inputType: 'insertText',
+        data: text
+      }));
+      
+      element.dispatchEvent(new InputEvent('input', {
+        bubbles: true,
+        cancelable: false,
+        inputType: 'insertText',
+        data: text
+      }));
+      
+      log('✅ Texto inserido (contentEditable):', text.substring(0, 50) + (text.length > 50 ? '...' : ''));
       
       return true;
     }
-  }
-  
-  return false;
-}
+    
+    return false;
+  };
 
-// Mostrar notificação
-function showNotification(command, text, isError = false, autoPasted = false) {
-  const existing = document.getElementById('macro-notification');
-  if (existing) existing.remove();
-  
-  const notification = document.createElement('div');
-  notification.id = 'macro-notification';
-  notification.style.cssText = `
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    background: ${isError ? '#ff6b6b' : 'linear-gradient(135deg, #ffb3ed, #ffc6f2)'};
-    color: white;
-    padding: 16px 24px;
-    border-radius: 12px;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    font-size: 14px;
-    font-weight: 500;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
-    z-index: 2147483647;
-    animation: slideIn 0.3s ease-out;
-  `;
-  
-  notification.innerHTML = `
-    <div style="display: flex; align-items: center; gap: 12px;">
-      <div style="font-size: 20px;">${isError ? '❌' : (autoPasted ? '🎉' : '✅')}</div>
-      <div>
-        <div style="font-weight: 600; margin-bottom: 4px;">${command}</div>
-        ${!isError ? `<div style="font-size: 11px; opacity: 0.8;">${autoPasted ? '✨ Substituído automaticamente!' : '📋 Copiado para área de transferência'}</div>` : '<div style="font-size: 12px; opacity: 0.9;">Macro não encontrada</div>'}
-      </div>
-    </div>
-  `;
-  
-  // Adicionar animação
-  const style = document.createElement('style');
-  style.textContent = `
-    @keyframes slideIn {
-      from {
-        transform: translateX(400px);
-        opacity: 0;
-      }
-      to {
-        transform: translateX(0);
-        opacity: 1;
-      }
-    }
-  `;
-  document.head.appendChild(style);
-  
-  document.body.appendChild(notification);
-  
-  setTimeout(() => {
-    notification.style.animation = 'slideIn 0.3s ease-out reverse';
-    setTimeout(() => notification.remove(), 300);
-  }, 3000);
-}
-
-// Capturar teclas
-document.addEventListener('keydown', (e) => {
-  // Iniciar captura com #
-  if (e.key === '#') {
-    buffer = '#';
-    capturing = true;
-    return;
-  }
-  
-  if (!capturing) return;
-  
-  // Processar comando (Espaço ou Enter)
-  if (e.key === ' ' || e.key === 'Enter') {
-    // Evitar processamento duplo
-    if (processing) {
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-      return;
-    }
+  const insertTextFallback = async (element, text, type) => {
+    log('🔄 Usando método fallback...');
     
-    const command = buffer.trim();
-    
-    // Se não é um comando válido, deixar o comportamento normal
-    if (!command || !macros[command]) {
-      if (command.length > 1) {
-        showNotification(command, '', true, false);
-      }
-      buffer = '';
-      capturing = false;
-      return;
-    }
-    
-    // Comando válido encontrado - MARCAR COMO PROCESSANDO PRIMEIRO
-    processing = true;
-    
-    // Prevenir evento completamente
-    e.preventDefault();
-    e.stopPropagation();
-    e.stopImmediatePropagation();
-    
-    const targetElement = e.target;
-    const macroText = macros[command];
-    
-    // Copiar para clipboard (backup)
-    copyToClipboard(macroText);
-    
-    // Verificar se é um campo de texto
-    const isTextField = targetElement && (
-      targetElement.tagName === 'INPUT' ||
-      targetElement.tagName === 'TEXTAREA' ||
-      targetElement.isContentEditable ||
-      targetElement.contentEditable === 'true'
-    );
-    
-    if (isTextField) {
-      // SUBSTITUIR o comando pelo texto da macro diretamente
-      const replaced = replaceCommandWithMacro(targetElement, command, macroText);
+    try {
+      // Tentar copiar para clipboard e simular Ctrl+V
+      await navigator.clipboard.writeText(text);
       
-      if (replaced) {
-        showNotification(command, macroText, false, true);
-      } else {
-        // Fallback: apenas notificar
-        showNotification(command, macroText, false, false);
-      }
-    } else {
-      // Fora de campos: apenas copiar para clipboard
-      showNotification(command, macroText, false, false);
+      element.focus();
+      
+      // Simular Ctrl+V
+      const pasteEvent = new KeyboardEvent('keydown', {
+        key: 'v',
+        code: 'KeyV',
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true
+      });
+      
+      element.dispatchEvent(pasteEvent);
+      
+      return true;
+    } catch (error) {
+      log('❌ Fallback falhou:', error);
+      return false;
+    }
+  };
+
+  // ==============================================
+  // COMMAND DETECTION
+  // ==============================================
+  const detectCommand = (text, cursorPos) => {
+    // Extrair palavra antes do cursor
+    let startPos = cursorPos;
+    while (startPos > 0 && text[startPos - 1] !== ' ' && text[startPos - 1] !== '\n') {
+      startPos--;
     }
     
-    buffer = '';
-    capturing = false;
+    const word = text.substring(startPos, cursorPos);
     
-    // Resetar flag após um delay maior para evitar duplicação
-    setTimeout(() => {
-      processing = false;
-      console.log('🔓 Processamento desbloqueado');
-    }, 500);
+    // Verificar se é um comando
+    if (word.startsWith(config.triggerChar) && word.length > 1) {
+      return word;
+    }
     
-    return;
-  }
-  
-  // Cancelar com Escape
-  if (e.key === 'Escape') {
-    buffer = '';
-    capturing = false;
-    return;
-  }
-  
-  // Backspace
-  if (e.key === 'Backspace') {
-    buffer = buffer.slice(0, -1);
-    if (buffer.length === 0) capturing = false;
-    return;
-  }
-  
-  // Adicionar caractere
-  if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
-    buffer += e.key;
-  }
-}, true);
+    return null;
+  };
 
-console.log('✨ Macro Assistant ativado! Digite #comando + Espaço');
-console.log('📝 Suporte: múltiplos parágrafos ✓ | emojis ✓');
+  const shouldTriggerExpansion = (text, cursorPos) => {
+    const command = detectCommand(text, cursorPos);
+    
+    if (!command) return null;
+    
+    // Verificar se o comando existe
+    if (state.macros[command]) {
+      return { command, replacement: state.macros[command] };
+    }
+    
+    return null;
+  };
+
+  // ==============================================
+  // NOTIFICATION SYSTEM
+  // ==============================================
+  const showNotification = (command, isError = false) => {
+    const existing = document.getElementById('macro-assistant-notification');
+    if (existing) existing.remove();
+
+    const notification = document.createElement('div');
+    notification.id = 'macro-assistant-notification';
+    notification.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 2147483647;
+      background: ${isError ? 'linear-gradient(135deg, #ff6b6b, #ee5a6f)' : 'linear-gradient(135deg, #667eea, #764ba2)'};
+      color: #ffffff;
+      padding: 16px 24px;
+      border-radius: 12px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+      animation: slideInRight 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+      max-width: 320px;
+      pointer-events: none;
+    `;
+
+    notification.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <div style="font-size: 24px; line-height: 1;">
+          ${isError ? '❌' : '✨'}
+        </div>
+        <div style="flex: 1;">
+          <div style="font-weight: 600; margin-bottom: 4px;">
+            ${command}
+          </div>
+          <div style="font-size: 12px; opacity: 0.9;">
+            ${isError ? 'Macro não encontrada' : 'Texto expandido!'}
+          </div>
+        </div>
+      </div>
+    `;
+
+    if (!document.getElementById('macro-assistant-styles')) {
+      const style = document.createElement('style');
+      style.id = 'macro-assistant-styles';
+      style.textContent = `
+        @keyframes slideInRight {
+          from { transform: translateX(400px); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes slideOutRight {
+          from { transform: translateX(0); opacity: 1; }
+          to { transform: translateX(400px); opacity: 0; }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
+    document.body.appendChild(notification);
+
+    setTimeout(() => {
+      notification.style.animation = 'slideOutRight 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55)';
+      setTimeout(() => notification.remove(), 300);
+    }, config.notificationDuration);
+  };
+
+  // ==============================================
+  // MAIN EXPANSION LOGIC
+  // ==============================================
+  const performExpansion = async (element, command, replacement) => {
+    // Prevenir múltiplas expansões simultâneas
+    const now = Date.now();
+    if (now - state.lastExpansion < config.minDelay) {
+      log('⏸️ Expansão muito rápida, ignorando');
+      return false;
+    }
+    
+    state.lastExpansion = now;
+    state.isProcessing = true;
+
+    try {
+      log('🚀 Iniciando expansão');
+      log('   Comando:', command);
+      log('   Elemento:', element.tagName, getEditableType(element));
+      log('   Texto antes:', getCurrentText(element).substring(0, 100));
+      log('   Substituição:', replacement.substring(0, 100) + (replacement.length > 100 ? '...' : ''));
+      
+      // Guardar informações para interceptor
+      state.lastReplacementText = replacement;
+      state.lastReplacementElement = element;
+      state.lastReplacementTime = now;
+      
+      const success = await replaceTextUniversal(element, command, replacement);
+      
+      if (success) {
+        log('   Texto depois:', getCurrentText(element).substring(0, 100));
+        showNotification(command, false);
+        log('✅ Expansão bem-sucedida!');
+      } else {
+        showNotification(command, true);
+        log('❌ Falha na expansão');
+      }
+      
+      return success;
+      
+    } catch (error) {
+      console.error('❌ Erro fatal na expansão:', error);
+      showNotification(command, true);
+      return false;
+    } finally {
+      setTimeout(() => {
+        state.isProcessing = false;
+      }, config.minDelay);
+    }
+  };
+
+  // ==============================================
+  // INPUT EVENT MONITORING - Universal
+  // ==============================================
+  const handleInput = async (event) => {
+    const element = event.target;
+    
+    // Verificar se é editável
+    if (!isEditableElement(element)) return;
+    
+    // Ignorar se já estamos processando
+    if (state.isProcessing) return;
+    
+    // Obter texto e posição do cursor
+    const text = getCurrentText(element);
+    const cursorPos = getCursorPosition(element);
+    
+    // Detectar se há um comando para expandir
+    const expansion = shouldTriggerExpansion(text, cursorPos);
+    
+    if (expansion) {
+      log('🎯 Comando detectado:', expansion.command);
+      
+      // Aguardar próximo frame para garantir que o input foi processado
+      await new Promise(resolve => requestAnimationFrame(resolve));
+      
+      // Realizar expansão
+      await performExpansion(element, expansion.command, expansion.replacement);
+    }
+  };
+
+  const handleKeyDown = async (event) => {
+    const element = event.target;
+    
+    // Verificar se é editável
+    if (!isEditableElement(element)) return;
+    
+    // Ignorar se já estamos processando
+    if (state.isProcessing) return;
+    
+    // Apenas processar Space e Enter
+    if (event.key !== ' ' && event.key !== 'Enter') return;
+    
+    // Obter texto e posição do cursor
+    const text = getCurrentText(element);
+    const cursorPos = getCursorPosition(element);
+    
+    // Detectar se há um comando para expandir
+    const expansion = shouldTriggerExpansion(text, cursorPos);
+    
+    if (expansion) {
+      log('🎯 Comando detectado (tecla):', expansion.command);
+      
+      // Prevenir comportamento padrão IMEDIATAMENTE
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      
+      // Realizar expansão
+      const success = await performExpansion(element, expansion.command, expansion.replacement);
+      
+      // Se foi Enter E a expansão foi bem-sucedida, simular Enter novamente
+      if (success && event.key === 'Enter') {
+        await sleep(100);
+        
+        // Simular pressionar Enter novamente para enviar
+        const enterEvent = new KeyboardEvent('keydown', {
+          key: 'Enter',
+          code: 'Enter',
+          keyCode: 13,
+          which: 13,
+          bubbles: true,
+          cancelable: true
+        });
+        
+        element.dispatchEvent(enterEvent);
+        
+        // Também disparar keypress e keyup para máxima compatibilidade
+        await sleep(10);
+        
+        const keypressEvent = new KeyboardEvent('keypress', {
+          key: 'Enter',
+          code: 'Enter',
+          keyCode: 13,
+          which: 13,
+          bubbles: true,
+          cancelable: true
+        });
+        
+        element.dispatchEvent(keypressEvent);
+        
+        await sleep(10);
+        
+        const keyupEvent = new KeyboardEvent('keyup', {
+          key: 'Enter',
+          code: 'Enter',
+          keyCode: 13,
+          which: 13,
+          bubbles: true,
+          cancelable: true
+        });
+        
+        element.dispatchEvent(keyupEvent);
+      }
+    }
+  };
+
+  // Monitorar mudanças de foco
+  const handleFocus = (event) => {
+    const element = event.target;
+    
+    if (isEditableElement(element)) {
+      state.activeElement = element;
+      log('📝 Elemento ativo:', element.tagName);
+    }
+  };
+
+  const handleBlur = () => {
+    if (state.activeElement) {
+      clearElementBuffer(state.activeElement);
+      state.activeElement = null;
+      log('👋 Elemento desfocado');
+    }
+  };
+
+  // ==============================================
+  // MUTATION OBSERVER - Dynamic Content Support
+  // ==============================================
+  const observeNewElements = () => {
+    const observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        if (mutation.type === 'childList') {
+          mutation.addedNodes.forEach((node) => {
+            if (node.nodeType === Node.ELEMENT_NODE) {
+              // Verificar se o novo elemento é editável
+              if (isEditableElement(node)) {
+                log('🆕 Novo elemento editável detectado:', node.tagName);
+              }
+              
+              // Verificar elementos filhos
+              if (node.querySelectorAll) {
+                const editables = node.querySelectorAll('input, textarea, [contenteditable="true"]');
+                if (editables.length > 0) {
+                  log('🆕 Novos elementos editáveis detectados:', editables.length);
+                }
+              }
+            }
+          });
+        }
+      }
+    });
+    
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+    
+    log('👁️ MutationObserver ativo');
+  };
+
+  // ==============================================
+  // NETWORK INTERCEPTOR - Para plataformas que enviam via API
+  // ==============================================
+  const setupNetworkInterceptor = () => {
+    // Interceptar fetch
+    const originalFetch = window.fetch;
+    window.fetch = async function(...args) {
+      try {
+        const [url, options] = args;
+        
+        // Se houver uma substituição recente (últimos 2 segundos)
+        if (state.lastReplacementText && 
+            state.lastReplacementTime && 
+            Date.now() - state.lastReplacementTime < 2000) {
+          
+          // Tentar modificar o payload se for POST/PUT/PATCH
+          if (options?.body && options?.method && 
+              ['POST', 'PUT', 'PATCH'].includes(options.method.toUpperCase())) {
+            
+            try {
+              const body = options.body;
+              let modified = false;
+              
+              // Se for string JSON
+              if (typeof body === 'string') {
+                try {
+                  const json = JSON.parse(body);
+                  
+                  // Procurar por campos comuns de mensagem
+                  const messageFields = ['content', 'message', 'text', 'body', 'msg', 'data'];
+                  
+                  for (const field of messageFields) {
+                    if (json[field] && typeof json[field] === 'string') {
+                      // Se contém o comando mas deveria conter o replacement
+                      const hasCommand = Object.keys(state.macros).some(cmd => 
+                        json[field].includes(cmd)
+                      );
+                      
+                      if (hasCommand) {
+                        log('🔄 Interceptando requisição, corrigindo payload');
+                        log('   Antes:', json[field]);
+                        
+                        // Substituir comando pelo texto
+                        Object.keys(state.macros).forEach(cmd => {
+                          if (json[field].includes(cmd)) {
+                            json[field] = json[field].replace(cmd, state.lastReplacementText);
+                          }
+                        });
+                        
+                        log('   Depois:', json[field]);
+                        modified = true;
+                      }
+                    }
+                  }
+                  
+                  if (modified) {
+                    options.body = JSON.stringify(json);
+                  }
+                  
+                } catch (e) {
+                  // Não é JSON, ignorar silenciosamente
+                }
+              }
+              
+            } catch (error) {
+              log('⚠️ Erro ao interceptar fetch:', error);
+            }
+          }
+        }
+      } catch (error) {
+        log('⚠️ Erro no interceptor fetch:', error);
+      }
+      
+      return originalFetch.apply(this, args);
+    };
+    
+    // Interceptar XMLHttpRequest
+    const originalOpen = XMLHttpRequest.prototype.open;
+    const originalSend = XMLHttpRequest.prototype.send;
+    
+    XMLHttpRequest.prototype.open = function(...args) {
+      try {
+        this._method = args[0];
+        this._url = args[1];
+      } catch (e) {
+        log('⚠️ Erro ao interceptar XHR.open:', e);
+      }
+      return originalOpen.apply(this, args);
+    };
+    
+    XMLHttpRequest.prototype.send = function(body) {
+      try {
+        if (state.lastReplacementText && 
+            state.lastReplacementTime && 
+            Date.now() - state.lastReplacementTime < 2000 &&
+            body && typeof body === 'string') {
+          
+          try {
+            const json = JSON.parse(body);
+            const messageFields = ['content', 'message', 'text', 'body', 'msg', 'data'];
+            let modified = false;
+            
+            for (const field of messageFields) {
+              if (json[field] && typeof json[field] === 'string') {
+                const hasCommand = Object.keys(state.macros).some(cmd => 
+                  json[field].includes(cmd)
+                );
+                
+                if (hasCommand) {
+                  log('🔄 Interceptando XHR, corrigindo payload');
+                  Object.keys(state.macros).forEach(cmd => {
+                    if (json[field].includes(cmd)) {
+                      json[field] = json[field].replace(cmd, state.lastReplacementText);
+                    }
+                  });
+                  modified = true;
+                }
+              }
+            }
+            
+            if (modified) {
+              body = JSON.stringify(json);
+            }
+            
+          } catch (e) {
+            // Não é JSON, ignorar silenciosamente
+          }
+        }
+      } catch (error) {
+        log('⚠️ Erro no interceptor XHR.send:', error);
+      }
+      
+      return originalSend.call(this, body);
+    };
+    
+    log('🌐 Interceptor de rede ativo');
+  };
+
+  // ==============================================
+  // INITIALIZATION - Universal
+  // ==============================================
+  const init = () => {
+    // Carregar macros
+    loadMacros();
+    
+    // Event listeners
+    document.addEventListener('input', handleInput, true);
+    document.addEventListener('keydown', handleKeyDown, true);
+    document.addEventListener('focus', handleFocus, true);
+    document.addEventListener('blur', handleBlur, true);
+    
+    // Monitorar novos elementos (para SPAs)
+    if (document.body) {
+      observeNewElements();
+    } else {
+      document.addEventListener('DOMContentLoaded', observeNewElements);
+    }
+    
+    // Interceptar requisições de rede
+    setupNetworkInterceptor();
+    
+    // Log de inicialização
+    console.log('%c⚡ Macro Assistant v3.2.1 ', 'background: linear-gradient(135deg, #667eea, #764ba2); color: white; font-size: 16px; font-weight: bold; padding: 8px 16px; border-radius: 8px;');
+    console.log('%c✨ Sistema Universal Ativo', 'color: #667eea; font-weight: bold;');
+    console.log('%c🎨 Suporte Aprimorado para Slate/Lexical', 'color: #667eea; font-weight: bold;');
+    console.log('%c🌐 Interceptor de Rede com Tratamento de Erros', 'color: #667eea; font-weight: bold;');
+    console.log('%c🛡️ Código Otimizado e Seguro', 'color: #667eea; font-weight: bold;');
+    console.log('%c📝 Digite #comando + Espaço/Enter para expandir', 'color: #666;');
+    console.log('%c🌍 Compatível com:', 'color: #666;');
+    console.log('  ✓ React, Vue, Angular, Svelte');
+    console.log('  ✓ Shadow DOM');
+    console.log('  ✓ ContentEditable + Slate/Lexical');
+    console.log('  ✓ Aplicações Single Page (SPA)');
+    console.log('  ✓ Gmail, WhatsApp Web, Slack, Discord, Notion');
+    console.log('  ✓ Todos os tipos de input/textarea');
+  };
+
+  // Inicializar imediatamente
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();

@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Teste - Macro Assistant v3.0</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 40px 20px;
+    }
+    
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    
+    .header {
+      background: white;
+      padding: 30px;
+      border-radius: 20px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+      margin-bottom: 30px;
+      text-align: center;
+    }
+    
+    h1 {
+      color: #667eea;
+      font-size: 32px;
+      margin-bottom: 10px;
+    }
+    
+    .subtitle {
+      color: #666;
+      font-size: 16px;
+    }
+    
+    .test-section {
+      background: white;
+      padding: 30px;
+      border-radius: 20px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+      margin-bottom: 20px;
+    }
+    
+    .test-title {
+      color: #333;
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #f0f0f0;
+    }
+    
+    input, textarea {
+      width: 100%;
+      padding: 15px;
+      border: 2px solid #e0e0e0;
+      border-radius: 10px;
+      font-size: 16px;
+      font-family: inherit;
+      transition: border-color 0.3s;
+      margin-bottom: 15px;
+    }
+    
+    input:focus, textarea:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+    
+    textarea {
+      min-height: 120px;
+      resize: vertical;
+    }
+    
+    .contenteditable {
+      width: 100%;
+      min-height: 120px;
+      padding: 15px;
+      border: 2px solid #e0e0e0;
+      border-radius: 10px;
+      font-size: 16px;
+      font-family: inherit;
+      margin-bottom: 15px;
+    }
+    
+    .contenteditable:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+    
+    .instructions {
+      background: #f8f9fa;
+      padding: 20px;
+      border-radius: 10px;
+      margin-bottom: 30px;
+    }
+    
+    .instructions h3 {
+      color: #333;
+      font-size: 16px;
+      margin-bottom: 10px;
+    }
+    
+    .instructions ol {
+      margin-left: 20px;
+      color: #666;
+      line-height: 1.8;
+    }
+    
+    .instructions code {
+      background: white;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      color: #667eea;
+      font-weight: 600;
+    }
+    
+    .success-indicator {
+      background: #d4edda;
+      color: #155724;
+      padding: 15px;
+      border-radius: 10px;
+      margin-top: 15px;
+      display: none;
+    }
+    
+    .test-macros {
+      background: #fff3cd;
+      padding: 20px;
+      border-radius: 10px;
+      margin-bottom: 30px;
+    }
+    
+    .test-macros h3 {
+      color: #856404;
+      font-size: 16px;
+      margin-bottom: 10px;
+    }
+    
+    .test-macros ul {
+      list-style: none;
+      color: #856404;
+      line-height: 2;
+    }
+    
+    .test-macros code {
+      background: white;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-weight: 600;
+      margin-right: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>⚡ Macro Assistant v3.0</h1>
+      <div class="subtitle">Página de Testes - Tecnologia Universal</div>
+    </div>
+    
+    <div class="instructions">
+      <h3>📝 Como Testar:</h3>
+      <ol>
+        <li>Crie algumas macros na extensão (clique no ícone)</li>
+        <li>Digite o comando da macro (ex: <code>#oi</code>) em qualquer campo abaixo</li>
+        <li>Pressione <strong>Espaço</strong> ou <strong>Enter</strong></li>
+        <li>O texto deve ser expandido automaticamente!</li>
+      </ol>
+    </div>
+    
+    <div class="test-macros">
+      <h3>🎯 Macros de Teste Sugeridas:</h3>
+      <ul>
+        <li><code>#oi</code> → Olá! Como posso ajudar você hoje?</li>
+        <li><code>#email</code> → seuemail@exemplo.com</li>
+        <li><code>#ass</code> → Atenciosamente,<br>Seu Nome</li>
+        <li><code>#teste</code> → Este é um teste da extensão!</li>
+      </ul>
+    </div>
+    
+    <div class="test-section">
+      <div class="test-title">1. Input Text (Tipo Texto)</div>
+      <input type="text" placeholder="Digite #oi + Espaço aqui...">
+    </div>
+    
+    <div class="test-section">
+      <div class="test-title">2. Input Email</div>
+      <input type="email" placeholder="Digite #email + Espaço aqui...">
+    </div>
+    
+    <div class="test-section">
+      <div class="test-title">3. Input Search</div>
+      <input type="search" placeholder="Digite #teste + Espaço aqui...">
+    </div>
+    
+    <div class="test-section">
+      <div class="test-title">4. Textarea (Múltiplas Linhas)</div>
+      <textarea placeholder="Digite #ass + Espaço aqui...&#10;Teste com múltiplas linhas!"></textarea>
+    </div>
+    
+    <div class="test-section">
+      <div class="test-title">5. ContentEditable (Div Editável)</div>
+      <div class="contenteditable" contenteditable="true" data-placeholder="Digite #oi + Espaço aqui..."></div>
+    </div>
+    
+    <div class="test-section">
+      <div class="test-title">6. Input Dentro de Form</div>
+      <form onsubmit="return false;">
+        <input type="text" placeholder="Digite #teste + Enter (deve expandir e enviar)">
+        <button type="submit" style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer;">Enviar</button>
+      </form>
+    </div>
+    
+    <div class="test-section">
+      <div class="test-title">7. Múltiplos Inputs (Teste de Estado)</div>
+      <input type="text" placeholder="Input 1: Digite #oi aqui">
+      <input type="text" placeholder="Input 2: Digite #teste aqui">
+      <input type="text" placeholder="Input 3: Digite #email aqui">
+    </div>
+    
+    <div class="test-section">
+      <div class="test-title">✅ Status do Console</div>
+      <p style="color: #666; margin-bottom: 10px;">
+        Abra o Console do Navegador (F12) para ver os logs:
+      </p>
+      <ul style="color: #666; margin-left: 20px; line-height: 1.8;">
+        <li>✅ Deve aparecer: <code style="background: #f0f0f0; padding: 2px 6px; border-radius: 4px;">⚡ Macro Assistant v3.0</code></li>
+        <li>✅ Ao digitar comando: <code style="background: #f0f0f0; padding: 2px 6px; border-radius: 4px;">🎯 Comando detectado</code></li>
+        <li>✅ Ao expandir: <code style="background: #f0f0f0; padding: 2px 6px; border-radius: 4px;">🚀 Expandindo...</code></li>
+        <li>✅ Sucesso: <code style="background: #f0f0f0; padding: 2px 6px; border-radius: 4px;">✅ Expansão bem-sucedida!</code></li>
+      </ul>
+    </div>
+  </div>
+  
+  <script>
+    // Placeholder para contenteditable
+    document.querySelectorAll('.contenteditable').forEach(el => {
+      const placeholder = el.getAttribute('data-placeholder');
+      
+      el.addEventListener('focus', function() {
+        if (this.innerHTML === '') {
+          this.style.color = '#000';
+        }
+      });
+      
+      el.addEventListener('blur', function() {
+        if (this.innerHTML === '') {
+          this.style.color = '#999';
+        }
+      });
+      
+      if (el.innerHTML === '') {
+        el.style.color = '#999';
+      }
+    });
+    
+    // Log de teste
+    console.log('%c🧪 Página de Teste Carregada', 'background: #667eea; color: white; padding: 8px; border-radius: 4px; font-weight: bold;');
+    console.log('%cAguardando Macro Assistant v3.0...', 'color: #666;');
+    
+    // Verificar se extensão está ativa
+    setTimeout(() => {
+      const hasExtension = document.getElementById('macro-assistant-styles');
+      if (!hasExtension) {
+        console.warn('%c⚠️ Extensão não detectada!', 'background: #ff6b6b; color: white; padding: 8px; border-radius: 4px; font-weight: bold;');
+        console.log('%cVerifique se a extensão está instalada e habilitada', 'color: #666;');
+      }
+    }, 2000);
+  </script>
+</body>
+</html>

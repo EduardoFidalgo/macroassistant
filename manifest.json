@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "Macro Assistant",
-  "version": "2.0.0",
-  "description": "Expanda texto com atalhos personalizados ✨",
-  "permissions": ["storage"],
+  "version": "3.2.1",
+  "description": "Expanda texto com atalhos personalizados - Funciona em TODOS os sites, incluindo Slate! ✨",
+  "permissions": ["storage", "clipboardWrite"],
   "icons": {
     "16": "icon16.png",
     "32": "icon32.png",
@@ -23,7 +23,9 @@
     {
       "matches": ["<all_urls>"],
       "js": ["content.js"],
-      "run_at": "document_end"
+      "run_at": "document_idle",
+      "all_frames": true
     }
-  ]
+  ],
+  "host_permissions": ["<all_urls>"]
 }
