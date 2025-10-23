@@ -613,25 +613,137 @@
       
       await sleep(50);
       
-      // 4. Inserir o texto de substituição usando execCommand
-      log('📝 Inserindo texto:', replacementText);
+      // 4. Inserir o texto de substituição
+      // Se o texto tem múltiplas linhas, precisamos inserir linha por linha
+      const lines = replacementText.split('\n');
+      const hasMultipleLines = lines.length > 1;
       
-      // Disparar beforeinput
-      element.dispatchEvent(new InputEvent('beforeinput', {
-        bubbles: true,
-        cancelable: true,
-        inputType: 'insertText',
-        data: replacementText
-      }));
+      log('📝 Inserindo texto:', replacementText.substring(0, 50) + (replacementText.length > 50 ? '...' : ''));
+      log('📊 Linhas detectadas:', lines.length);
       
-      const inserted = document.execCommand('insertText', false, replacementText);
-      
-      if (!inserted) {
-        log('⚠️ execCommand insertText falhou');
+      if (!document.execCommand) {
+        log('⚠️ execCommand não disponível');
         return false;
       }
       
-      log('✅ Texto inserido');
+      // Função auxiliar para inserir texto de forma segura (compatível com emojis)
+      const insertTextSafely = async (text) => {
+        // Disparar beforeinput
+        element.dispatchEvent(new InputEvent('beforeinput', {
+          bubbles: true,
+          cancelable: true,
+          inputType: 'insertText',
+          data: text
+        }));
+        
+        // Tentar inserir o texto completo primeiro
+        let inserted = document.execCommand('insertText', false, text);
+        
+        if (inserted) {
+          return true;
+        }
+        
+        // Se falhar, pode ser por causa de emojis ou caracteres especiais
+        // Tentar inserir usando Array.from para lidar com emojis corretamente
+        log('⚠️ Inserção direta falhou, tentando caractere por caractere');
+        
+        const chars = Array.from(text); // Array.from respeita emojis multi-byte
+        
+        for (const char of chars) {
+          const charInserted = document.execCommand('insertText', false, char);
+          
+          if (!charInserted) {
+            log('⚠️ Falha ao inserir caractere:', char);
+            return false;
+          }
+          
+          await sleep(5); // Pequeno delay entre caracteres
+        }
+        
+        return true;
+      };
+      
+      if (hasMultipleLines) {
+        // Inserir linha por linha com Enter entre elas
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+          
+          log(`📝 Inserindo linha ${i + 1}/${lines.length}:`, line.substring(0, 30) + '...');
+          
+          // Inserir a linha usando método seguro
+          const inserted = await insertTextSafely(line);
+          
+          if (!inserted) {
+            log('⚠️ Falha ao inserir linha', i + 1);
+            return false;
+          }
+          
+          await sleep(20);
+          
+          // Se não for a última linha, inserir quebra de linha
+          if (i < lines.length - 1) {
+            log('⏎ Inserindo quebra de linha');
+            
+            // Disparar beforeinput para quebra de linha
+            element.dispatchEvent(new InputEvent('beforeinput', {
+              bubbles: true,
+              cancelable: true,
+              inputType: 'insertLineBreak',
+              data: '\n'
+            }));
+            
+            // Tentar diferentes métodos de quebra de linha
+            // 1. Primeiro tentar insertLineBreak (Shift+Enter - quebra suave)
+            let lineBreak = document.execCommand('insertLineBreak', false, null);
+            
+            if (!lineBreak) {
+              // 2. Se falhar, tentar inserir \n diretamente
+              log('⏎ Tentando inserir \\n diretamente');
+              lineBreak = document.execCommand('insertText', false, '\n');
+            }
+            
+            if (!lineBreak) {
+              // 3. Se falhar, tentar insertParagraph (Enter - novo parágrafo)
+              log('⏎ Tentando insertParagraph');
+              lineBreak = document.execCommand('insertParagraph', false, null);
+            }
+            
+            if (!lineBreak) {
+              log('⚠️ Falha ao inserir quebra de linha');
+            }
+            
+            await sleep(30);
+          }
+        }
+        
+        log('✅ Todas as linhas inseridas');
+        
+        // Limpar elementos vazios que possam ter sido criados
+        await sleep(30);
+        
+        // Encontrar e remover divs/spans vazios no elemento
+        const emptyElements = element.querySelectorAll('div:empty, span:empty, p:empty');
+        if (emptyElements.length > 0) {
+          log('🧹 Removendo', emptyElements.length, 'elementos vazios');
+          emptyElements.forEach(el => {
+            // Verificar se está realmente vazio (sem texto e sem filhos)
+            if (!el.textContent.trim() && el.children.length === 0) {
+              el.remove();
+            }
+          });
+        }
+        
+      } else {
+        // Texto de linha única - inserir usando método seguro
+        const inserted = await insertTextSafely(replacementText);
+        
+        if (!inserted) {
+          log('⚠️ Falha ao inserir texto');
+          return false;
+        }
+        
+        log('✅ Texto inserido');
+      }
       
       await sleep(50);
       
