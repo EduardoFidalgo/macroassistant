@@ -166,6 +166,15 @@
       justify-content: space-between;
       align-items: center;
       margin-bottom: 16px;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    
+    .header-actions {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      flex-shrink: 0;
     }
     
     .section-title {
@@ -199,6 +208,16 @@
     .clear-all-btn:hover {
       background: #fef2f2;
       border-color: #ef4444;
+    }
+    
+    #import-btn:hover {
+      background: #eff6ff;
+      border-color: #3b82f6;
+    }
+    
+    #export-btn:hover {
+      background: #f0fdf4;
+      border-color: #10b981;
     }
     
     #macros-list {
@@ -405,11 +424,23 @@
           <span>Suas Macros</span>
           <span class="macro-count" id="macro-count">0</span>
         </div>
-        <button id="clear-all-btn" class="clear-all-btn" style="display: none;">
-          <span>🗑️</span>
-          <span>Limpar Tudo</span>
-        </button>
+        <div class="header-actions">
+          <button id="import-btn" class="clear-all-btn" style="display: none; color: #3b82f6; border-color: #bfdbfe;">
+            <span>📥</span>
+            <span>Importar</span>
+          </button>
+          <button id="export-btn" class="clear-all-btn" style="display: none; color: #10b981; border-color: #a7f3d0;">
+            <span>📤</span>
+            <span>Exportar</span>
+          </button>
+          <button id="clear-all-btn" class="clear-all-btn" style="display: none;">
+            <span>🗑️</span>
+            <span>Limpar Tudo</span>
+          </button>
+        </div>
       </div>
+      
+      <input type="file" id="import-file-input" accept=".json" style="display: none;">
       
       <div id="macros-list">
         <div class="empty-state">

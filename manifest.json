@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Macro Assistant",
   "version": "3.2.1",
-  "description": "Expanda texto com atalhos personalizados - Funciona em TODOS os sites, incluindo Slate! ✨",
+  "description": "Expanda texto com atalhos personalizados - Adaptado para plataformas com SLATE. ✨ Plataformas validadas: Discord, Slack, Bird, Teams e +",
   "permissions": ["storage", "clipboardWrite"],
   "icons": {
     "16": "icon16.png",

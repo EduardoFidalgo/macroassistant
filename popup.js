@@ -4,6 +4,9 @@ const textInput = document.getElementById('text-input');
 const addBtn = document.getElementById('add-btn');
 const cancelBtn = document.getElementById('cancel-btn');
 const clearAllBtn = document.getElementById('clear-all-btn');
+const exportBtn = document.getElementById('export-btn');
+const importBtn = document.getElementById('import-btn');
+const importFileInput = document.getElementById('import-file-input');
 const macrosList = document.getElementById('macros-list');
 const macroCount = document.getElementById('macro-count');
 
@@ -23,6 +26,8 @@ function loadMacros() {
 function updateMacroCount(count) {
   macroCount.textContent = count;
   clearAllBtn.style.display = count > 0 ? 'flex' : 'none';
+  exportBtn.style.display = count > 0 ? 'flex' : 'none';
+  importBtn.style.display = 'flex'; // Sempre visível
 }
 
 // Exibir macros
@@ -206,10 +211,140 @@ function clearAllMacros() {
   }
 }
 
+// Exportar macros
+function exportMacros() {
+  chrome.storage.local.get(['macros'], (result) => {
+    const macros = result.macros || {};
+    const macrosCount = Object.keys(macros).length;
+    
+    if (macrosCount === 0) {
+      alert('⚠️ Não há macros para exportar!');
+      return;
+    }
+    
+    // Criar objeto com metadados
+    const exportData = {
+      version: '1.0',
+      exportDate: new Date().toISOString(),
+      macrosCount: macrosCount,
+      macros: macros
+    };
+    
+    // Converter para JSON
+    const jsonString = JSON.stringify(exportData, null, 2);
+    
+    // Criar blob e download
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    
+    // Criar nome do arquivo com data
+    const date = new Date().toISOString().split('T')[0];
+    const filename = `macros-backup-${date}.json`;
+    
+    // Trigger download
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    
+    // Limpar
+    URL.revokeObjectURL(url);
+    
+    // Feedback
+    alert(`✅ ${macrosCount} macro(s) exportada(s) com sucesso!\n\nArquivo: ${filename}`);
+  });
+}
+
+// Importar macros
+function importMacros() {
+  importFileInput.click();
+}
+
+// Processar arquivo importado
+function handleImportFile(event) {
+  const file = event.target.files[0];
+  
+  if (!file) return;
+  
+  const reader = new FileReader();
+  
+  reader.onload = (e) => {
+    try {
+      const content = e.target.result;
+      const importData = JSON.parse(content);
+      
+      // Validar estrutura
+      if (!importData.macros || typeof importData.macros !== 'object') {
+        throw new Error('Formato de arquivo inválido');
+      }
+      
+      const newMacros = importData.macros;
+      const newMacrosCount = Object.keys(newMacros).length;
+      
+      if (newMacrosCount === 0) {
+        alert('⚠️ O arquivo não contém macros válidas!');
+        return;
+      }
+      
+      // Verificar se há macros existentes
+      chrome.storage.local.get(['macros'], (result) => {
+        const existingMacros = result.macros || {};
+        const existingCount = Object.keys(existingMacros).length;
+        
+        let confirmMsg = `📥 Importar ${newMacrosCount} macro(s)?\n\n`;
+        
+        if (existingCount > 0) {
+          // Verificar conflitos
+          const conflicts = Object.keys(newMacros).filter(cmd => existingMacros[cmd]);
+          
+          if (conflicts.length > 0) {
+            confirmMsg += `⚠️ ${conflicts.length} macro(s) serão sobrescritas:\n`;
+            confirmMsg += conflicts.slice(0, 5).join(', ');
+            if (conflicts.length > 5) {
+              confirmMsg += `... e mais ${conflicts.length - 5}`;
+            }
+            confirmMsg += '\n\n';
+          }
+          
+          confirmMsg += 'Suas macros existentes serão mescladas com as importadas.';
+        }
+        
+        if (confirm(confirmMsg)) {
+          // Mesclar macros (novas sobrescrevem existentes)
+          const mergedMacros = { ...existingMacros, ...newMacros };
+          
+          chrome.storage.local.set({ macros: mergedMacros }, () => {
+            cancelEdit();
+            loadMacros();
+            
+            alert(`✅ Importação concluída!\n\n${newMacrosCount} macro(s) importada(s)\nTotal de macros: ${Object.keys(mergedMacros).length}`);
+          });
+        }
+      });
+      
+    } catch (error) {
+      alert(`❌ Erro ao importar arquivo:\n\n${error.message}\n\nVerifique se o arquivo é um backup válido de macros.`);
+    } finally {
+      // Limpar input para permitir reimportar o mesmo arquivo
+      event.target.value = '';
+    }
+  };
+  
+  reader.onerror = () => {
+    alert('❌ Erro ao ler o arquivo!');
+    event.target.value = '';
+  };
+  
+  reader.readAsText(file);
+}
+
 // Event listeners
 addBtn.addEventListener('click', saveMacro);
 cancelBtn.addEventListener('click', cancelEdit);
 clearAllBtn.addEventListener('click', clearAllMacros);
+exportBtn.addEventListener('click', exportMacros);
+importBtn.addEventListener('click', importMacros);
+importFileInput.addEventListener('change', handleImportFile);
 
 commandInput.addEventListener('keypress', (e) => {
   if (e.key === 'Enter') {
