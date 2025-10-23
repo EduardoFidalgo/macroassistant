@@ -562,29 +562,14 @@
       log('📍 Comando encontrado entre', startPos, 'e', cursorPos);
       log('📝 Conteúdo original:', textContent);
       
-      // ETAPA 1: Deletar o comando primeiro
-      // Selecionar o range do comando
-      const deleteRange = document.createRange();
-      deleteRange.setStart(textNode, startPos);
-      deleteRange.setEnd(textNode, cursorPos);
-      selection.removeAllRanges();
+      // ESTRATÉGIA: Modificar textContent diretamente e deixar Slate sincronizar
+      // Criar novo texto sem o comando
+      const newTextContent = textContent.substring(0, startPos) + replacementText + textContent.substring(cursorPos);
       
-      // Validar que o nó está no documento antes de adicionar range
-      if (!document.contains(textNode)) {
-        log('⚠️ Nó de texto não está no documento');
-        return false;
-      }
+      log('🔄 Tentando modificação direta do textContent');
+      log('📝 Novo conteúdo calculado:', newTextContent);
       
-      try {
-        selection.addRange(deleteRange);
-      } catch (e) {
-        log('⚠️ Erro ao adicionar deleteRange:', e.message);
-        return false;
-      }
-      
-      log('🗑️ Deletando comando...');
-      
-      // Disparar evento de deleção
+      // Disparar beforeinput antes da modificação
       element.dispatchEvent(new InputEvent('beforeinput', {
         bubbles: true,
         cancelable: true,
@@ -594,129 +579,28 @@
       
       await sleep(5);
       
-      // Deletar o conteúdo
-      deleteRange.deleteContents();
+      // Modificar diretamente o nó de texto
+      textNode.textContent = newTextContent;
       
-      element.dispatchEvent(new InputEvent('input', {
-        bubbles: true,
-        cancelable: false,
-        inputType: 'deleteContentBackward'
-      }));
+      log('✅ TextContent modificado:', textNode.textContent);
       
-      await sleep(10);
+      // Posicionar cursor após o texto inserido
+      const newCursorPos = startPos + replacementText.length;
       
-      log('✅ Comando deletado, conteúdo atual:', textNode.textContent);
-      
-      // ETAPA 2: Inserir o texto de substituição
-      // Verificar se o nó de texto ainda existe no DOM
-      if (!textNode.parentNode) {
-        log('⚠️ Nó de texto foi removido do DOM após deleteContents()');
-        // Tentar encontrar um novo ponto de inserção no elemento
-        const walker = document.createTreeWalker(
-          element,
-          NodeFilter.SHOW_TEXT,
-          null
-        );
-        
-        let newTextNode = walker.nextNode();
-        if (!newTextNode) {
-          // Criar um novo nó de texto vazio no elemento
-          newTextNode = document.createTextNode('');
-          element.appendChild(newTextNode);
-          log('📝 Criado novo nó de texto no elemento');
-        }
-        
-        // Usar o novo nó encontrado/criado
-        const insertRange = document.createRange();
-        insertRange.setStart(newTextNode, 0);
-        insertRange.setEnd(newTextNode, 0);
-        selection.removeAllRanges();
-        
-        // Validar que o nó está no documento antes de adicionar range
-        if (newTextNode.parentNode && document.contains(newTextNode)) {
-          try {
-            selection.addRange(insertRange);
-          } catch (e) {
-            log('⚠️ Erro ao adicionar range (novo nó):', e.message);
-          }
-        }
-        
-        log('📝 Inserindo texto:', replacementText);
-        
-        // Disparar evento de inserção
-        element.dispatchEvent(new InputEvent('beforeinput', {
-          bubbles: true,
-          cancelable: true,
-          inputType: 'insertText',
-          data: replacementText
-        }));
-        
-        await sleep(5);
-        
-        // Inserir o texto
-        const textNodeToInsert = document.createTextNode(replacementText);
-        insertRange.insertNode(textNodeToInsert);
-        
-        // Posicionar cursor após o texto inserido - validar novamente
-        if (textNodeToInsert.parentNode && document.contains(textNodeToInsert)) {
-          try {
-            const finalRange = document.createRange();
-            finalRange.setStartAfter(textNodeToInsert);
-            finalRange.setEndAfter(textNodeToInsert);
-            selection.removeAllRanges();
-            selection.addRange(finalRange);
-          } catch (e) {
-            log('⚠️ Erro ao posicionar cursor (novo nó):', e.message);
-          }
-        }
-        
-      } else {
-        // Nó original ainda existe, usar ele
-        const insertRange = document.createRange();
-        insertRange.setStart(textNode, startPos);
-        insertRange.setEnd(textNode, startPos);
-        selection.removeAllRanges();
-        
-        // Validar que o nó ainda está no documento
-        if (document.contains(textNode)) {
-          try {
-            selection.addRange(insertRange);
-          } catch (e) {
-            log('⚠️ Erro ao adicionar range (nó original):', e.message);
-          }
-        }
-        
-        log('📝 Inserindo texto:', replacementText);
-        
-        // Disparar evento de inserção
-        element.dispatchEvent(new InputEvent('beforeinput', {
-          bubbles: true,
-          cancelable: true,
-          inputType: 'insertText',
-          data: replacementText
-        }));
-        
-        await sleep(5);
-        
-        // Inserir o texto
-        const textNodeToInsert = document.createTextNode(replacementText);
-        insertRange.insertNode(textNodeToInsert);
-        
-        // Posicionar cursor após o texto inserido - validar novamente
-        if (textNodeToInsert.parentNode && document.contains(textNodeToInsert)) {
-          try {
-            const finalRange = document.createRange();
-            finalRange.setStartAfter(textNodeToInsert);
-            finalRange.setEndAfter(textNodeToInsert);
-            selection.removeAllRanges();
-            selection.addRange(finalRange);
-          } catch (e) {
-            log('⚠️ Erro ao posicionar cursor (nó original):', e.message);
-          }
+      if (document.contains(textNode)) {
+        try {
+          const newRange = document.createRange();
+          newRange.setStart(textNode, newCursorPos);
+          newRange.setEnd(textNode, newCursorPos);
+          selection.removeAllRanges();
+          selection.addRange(newRange);
+          log('✅ Cursor posicionado em:', newCursorPos);
+        } catch (e) {
+          log('⚠️ Erro ao posicionar cursor:', e.message);
         }
       }
       
-      // Eventos finais após inserção
+      // Disparar eventos de input
       element.dispatchEvent(new InputEvent('input', {
         bubbles: true,
         cancelable: false,
@@ -727,12 +611,6 @@
       await sleep(10);
       
       element.dispatchEvent(new Event('change', { bubbles: true }));
-      
-      // Forçar reconciliação do React (se aplicável)
-      const slateEditor = getSlateEditor(element);
-      if (slateEditor) {
-        slateEditor.dispatchEvent(new Event('input', { bubbles: true }));
-      }
       
       log('✅ Texto forçado no DOM');
       return true;
