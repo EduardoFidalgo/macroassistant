@@ -562,45 +562,80 @@
       log('📍 Comando encontrado entre', startPos, 'e', cursorPos);
       log('📝 Conteúdo original:', textContent);
       
-      // ESTRATÉGIA: Modificar textContent diretamente e deixar Slate sincronizar
-      // Criar novo texto sem o comando
-      const newTextContent = textContent.substring(0, startPos) + replacementText + textContent.substring(cursorPos);
+      // ESTRATÉGIA: Usar Selection API para selecionar o comando e depois substituir
+      // Isso respeita o fluxo que o Slate espera
       
-      log('🔄 Tentando modificação direta do textContent');
-      log('📝 Novo conteúdo calculado:', newTextContent);
+      // 1. Criar range para selecionar exatamente o comando
+      const selectRange = document.createRange();
+      selectRange.setStart(textNode, startPos);
+      selectRange.setEnd(textNode, cursorPos);
       
-      // Disparar beforeinput antes da modificação
+      // 2. Aplicar a seleção
+      selection.removeAllRanges();
+      selection.addRange(selectRange);
+      
+      log('🔄 Comando selecionado no range:', startPos, 'até', cursorPos);
+      log('📝 Texto selecionado:', selection.toString());
+      
+      // Validar que selecionamos o comando correto
+      const selectedText = selection.toString();
+      if (selectedText !== command) {
+        log('⚠️ Seleção incorreta:', selectedText, 'vs', command);
+        return false;
+      }
+      
+      await sleep(10);
+      
+      // 3. Deletar o texto selecionado usando execCommand
+      log('🗑️ Deletando comando selecionado...');
+      
+      if (!document.execCommand) {
+        log('⚠️ execCommand não disponível');
+        return false;
+      }
+      
+      // Disparar beforeinput
       element.dispatchEvent(new InputEvent('beforeinput', {
         bubbles: true,
         cancelable: true,
-        inputType: 'deleteContentBackward',
+        inputType: 'deleteContent',
         data: null
       }));
       
-      await sleep(5);
+      const deleted = document.execCommand('delete', false, null);
       
-      // Modificar diretamente o nó de texto
-      textNode.textContent = newTextContent;
-      
-      log('✅ TextContent modificado:', textNode.textContent);
-      
-      // Posicionar cursor após o texto inserido
-      const newCursorPos = startPos + replacementText.length;
-      
-      if (document.contains(textNode)) {
-        try {
-          const newRange = document.createRange();
-          newRange.setStart(textNode, newCursorPos);
-          newRange.setEnd(textNode, newCursorPos);
-          selection.removeAllRanges();
-          selection.addRange(newRange);
-          log('✅ Cursor posicionado em:', newCursorPos);
-        } catch (e) {
-          log('⚠️ Erro ao posicionar cursor:', e.message);
-        }
+      if (!deleted) {
+        log('⚠️ execCommand delete falhou');
+        return false;
       }
       
-      // Disparar eventos de input
+      log('✅ Comando deletado');
+      
+      await sleep(50);
+      
+      // 4. Inserir o texto de substituição usando execCommand
+      log('📝 Inserindo texto:', replacementText);
+      
+      // Disparar beforeinput
+      element.dispatchEvent(new InputEvent('beforeinput', {
+        bubbles: true,
+        cancelable: true,
+        inputType: 'insertText',
+        data: replacementText
+      }));
+      
+      const inserted = document.execCommand('insertText', false, replacementText);
+      
+      if (!inserted) {
+        log('⚠️ execCommand insertText falhou');
+        return false;
+      }
+      
+      log('✅ Texto inserido');
+      
+      await sleep(50);
+      
+      // 5. Disparar eventos finais
       element.dispatchEvent(new InputEvent('input', {
         bubbles: true,
         cancelable: false,
@@ -608,11 +643,9 @@
         data: replacementText
       }));
       
-      await sleep(10);
-      
       element.dispatchEvent(new Event('change', { bubbles: true }));
       
-      log('✅ Texto forçado no DOM');
+      log('✅ Substituição completa via execCommand');
       return true;
       
     } catch (error) {
