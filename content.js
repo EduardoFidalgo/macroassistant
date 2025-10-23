@@ -403,10 +403,23 @@
       const commandLength = command.length;
       if (commandLength <= 0) return false;
       
-      // Selecionar comando usando modify
-      for (let i = 0; i < commandLength; i++) {
-        selection.modify('extend', 'backward', 'character');
+      // Primeiro validar se o texto antes do cursor é realmente o comando
+      const startPos = Math.max(0, cursorPos - commandLength);
+      const textBeforeCursor = textContent.substring(startPos, cursorPos);
+      
+      if (textBeforeCursor !== command) {
+        log('⚠️ ExecCommand: texto não corresponde:', textBeforeCursor, 'vs', command);
+        return false;
       }
+      
+      log('✅ ExecCommand: comando validado:', command);
+      
+      // Criar um range preciso para selecionar o comando
+      const deleteRange = document.createRange();
+      deleteRange.setStart(textNode, startPos);
+      deleteRange.setEnd(textNode, cursorPos);
+      selection.removeAllRanges();
+      selection.addRange(deleteRange);
       
       await sleep(10);
       
@@ -416,10 +429,21 @@
         return false;
       }
       
+      // Validar que a seleção contém exatamente o comando
+      const selectedText = selection.toString();
+      if (selectedText !== command) {
+        log('⚠️ Seleção não corresponde ao comando:', selectedText, 'vs', command);
+        return false;
+      }
+      
+      log('🗑️ ExecCommand: deletando:', selectedText);
+      
       // Usar execCommand para deletar e inserir
       document.execCommand('delete', false, null);
       
       await sleep(50);
+      
+      log('📝 ExecCommand: inserindo:', replacementText);
       
       document.execCommand('insertText', false, replacementText);
       
@@ -572,36 +596,87 @@
       log('✅ Comando deletado, conteúdo atual:', textNode.textContent);
       
       // ETAPA 2: Inserir o texto de substituição
-      // Posicionar cursor onde estava o comando
-      const insertRange = document.createRange();
-      insertRange.setStart(textNode, startPos);
-      insertRange.setEnd(textNode, startPos);
-      selection.removeAllRanges();
-      selection.addRange(insertRange);
+      // Verificar se o nó de texto ainda existe no DOM
+      if (!textNode.parentNode) {
+        log('⚠️ Nó de texto foi removido do DOM após deleteContents()');
+        // Tentar encontrar um novo ponto de inserção no elemento
+        const walker = document.createTreeWalker(
+          element,
+          NodeFilter.SHOW_TEXT,
+          null
+        );
+        
+        let newTextNode = walker.nextNode();
+        if (!newTextNode) {
+          // Criar um novo nó de texto vazio no elemento
+          newTextNode = document.createTextNode('');
+          element.appendChild(newTextNode);
+          log('📝 Criado novo nó de texto no elemento');
+        }
+        
+        // Usar o novo nó encontrado/criado
+        const insertRange = document.createRange();
+        insertRange.setStart(newTextNode, 0);
+        insertRange.setEnd(newTextNode, 0);
+        selection.removeAllRanges();
+        selection.addRange(insertRange);
+        
+        log('📝 Inserindo texto:', replacementText);
+        
+        // Disparar evento de inserção
+        element.dispatchEvent(new InputEvent('beforeinput', {
+          bubbles: true,
+          cancelable: true,
+          inputType: 'insertText',
+          data: replacementText
+        }));
+        
+        await sleep(5);
+        
+        // Inserir o texto
+        const textNodeToInsert = document.createTextNode(replacementText);
+        insertRange.insertNode(textNodeToInsert);
+        
+        // Posicionar cursor após o texto inserido
+        const finalRange = document.createRange();
+        finalRange.setStartAfter(textNodeToInsert);
+        finalRange.setEndAfter(textNodeToInsert);
+        selection.removeAllRanges();
+        selection.addRange(finalRange);
+        
+      } else {
+        // Nó original ainda existe, usar ele
+        const insertRange = document.createRange();
+        insertRange.setStart(textNode, startPos);
+        insertRange.setEnd(textNode, startPos);
+        selection.removeAllRanges();
+        selection.addRange(insertRange);
+        
+        log('📝 Inserindo texto:', replacementText);
+        
+        // Disparar evento de inserção
+        element.dispatchEvent(new InputEvent('beforeinput', {
+          bubbles: true,
+          cancelable: true,
+          inputType: 'insertText',
+          data: replacementText
+        }));
+        
+        await sleep(5);
+        
+        // Inserir o texto
+        const textNodeToInsert = document.createTextNode(replacementText);
+        insertRange.insertNode(textNodeToInsert);
+        
+        // Posicionar cursor após o texto inserido
+        const finalRange = document.createRange();
+        finalRange.setStartAfter(textNodeToInsert);
+        finalRange.setEndAfter(textNodeToInsert);
+        selection.removeAllRanges();
+        selection.addRange(finalRange);
+      }
       
-      log('📝 Inserindo texto:', replacementText);
-      
-      // Disparar evento de inserção
-      element.dispatchEvent(new InputEvent('beforeinput', {
-        bubbles: true,
-        cancelable: true,
-        inputType: 'insertText',
-        data: replacementText
-      }));
-      
-      await sleep(5);
-      
-      // Inserir o texto
-      const textNodeToInsert = document.createTextNode(replacementText);
-      insertRange.insertNode(textNodeToInsert);
-      
-      // Posicionar cursor após o texto inserido
-      const finalRange = document.createRange();
-      finalRange.setStartAfter(textNodeToInsert);
-      finalRange.setEndAfter(textNodeToInsert);
-      selection.removeAllRanges();
-      selection.addRange(finalRange);
-      
+      // Eventos finais após inserção
       element.dispatchEvent(new InputEvent('input', {
         bubbles: true,
         cancelable: false,
