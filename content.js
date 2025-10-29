@@ -14,18 +14,33 @@
     activeElement: null,
     inputBuffer: new Map(),
     isProcessing: false,
+    processingStartTime: 0,
     lastExpansion: 0,
     lastReplacementText: null,
     lastReplacementElement: null,
-    lastReplacementTime: 0
+    lastReplacementTime: 0,
+    lastCommandToReplace: null
   };
+  
+  // Watchdog para liberar estado travado
+  setInterval(() => {
+    if (state.isProcessing && state.processingStartTime > 0) {
+      const elapsed = Date.now() - state.processingStartTime;
+      // Se estiver processando há mais de 2 segundos, forçar liberação
+      if (elapsed > 2000) {
+        log('⚠️ WATCHDOG: Estado travado detectado, forçando liberação');
+        state.isProcessing = false;
+        state.processingStartTime = 0;
+      }
+    }
+  }, 500);
 
   // ==============================================
   // CONFIGURATION
   // ==============================================
   const config = {
     triggerChar: '#',
-    minDelay: 100,
+    minDelay: 50, // Reduzido para 50ms para evitar travamento
     notificationDuration: 2500,
     debugMode: true
   };
@@ -1191,6 +1206,7 @@
     
     state.lastExpansion = now;
     state.isProcessing = true;
+    state.processingStartTime = now;
 
     try {
       log('🚀 Iniciando expansão');
@@ -1222,9 +1238,15 @@
       showNotification(command, true);
       return false;
     } finally {
-      setTimeout(() => {
-        state.isProcessing = false;
-      }, config.minDelay);
+      // Liberar o estado IMEDIATAMENTE após a expansão
+      // Não usar setTimeout para evitar travamento
+      state.isProcessing = false;
+      state.processingStartTime = 0;
+      
+      // Limpar buffer do elemento para evitar detecções duplicadas
+      clearElementBuffer(element);
+      
+      log('🔓 Estado liberado, elemento pode ser editado novamente');
     }
   };
 
@@ -1237,8 +1259,11 @@
     // Verificar se é editável
     if (!isEditableElement(element)) return;
     
-    // Ignorar se já estamos processando
-    if (state.isProcessing) return;
+    // Ignorar se já estamos processando (mas não bloquear permanentemente)
+    if (state.isProcessing) {
+      log('⏸️ Processamento em andamento, aguardando...');
+      return;
+    }
     
     // Obter texto e posição do cursor
     const text = getCurrentText(element);
@@ -1264,8 +1289,23 @@
     // Verificar se é editável
     if (!isEditableElement(element)) return;
     
-    // Ignorar se já estamos processando
-    if (state.isProcessing) return;
+    // SEMPRE permitir teclas de edição (Backspace, Delete, Arrow keys, etc)
+    const editKeys = ['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'];
+    if (editKeys.includes(event.key)) {
+      // Forçar liberação do estado se necessário
+      if (state.isProcessing) {
+        log('⚠️ Liberando estado para permitir edição');
+        state.isProcessing = false;
+        state.processingStartTime = 0;
+      }
+      return; // Permitir comportamento padrão
+    }
+    
+    // Ignorar se já estamos processando (mas não bloquear permanentemente)
+    if (state.isProcessing) {
+      log('⏸️ Processamento em andamento, ignorando keydown');
+      return;
+    }
     
     // Apenas processar Space e Enter
     if (event.key !== ' ' && event.key !== 'Enter') return;
@@ -1280,6 +1320,35 @@
     if (expansion) {
       log('🎯 Comando detectado (tecla):', expansion.command);
       
+      // Se for editor Slate, NÃO manipular o DOM
+      // Apenas guardar a expansão para o interceptor de rede
+      if (isSlateEditor(element)) {
+        log('🎨 Editor Slate detectado - usando apenas interceptor de rede');
+        log('   Comando a substituir:', expansion.command);
+        log('   Texto de substituição:', expansion.replacement?.substring(0, 50));
+        
+        // Guardar informações para o interceptor
+        state.lastReplacementText = expansion.replacement;
+        state.lastReplacementElement = element;
+        state.lastReplacementTime = Date.now();
+        state.lastCommandToReplace = expansion.command;
+        
+        log('   Estado configurado:');
+        log('     - lastCommandToReplace:', state.lastCommandToReplace);
+        log('     - lastReplacementText:', state.lastReplacementText?.substring(0, 30));
+        log('     - lastReplacementTime:', new Date(state.lastReplacementTime).toLocaleTimeString());
+        
+        // Mostrar notificação
+        showNotification(expansion.command, false);
+        
+        log('✅ Expansão agendada para interceptor de rede');
+        log('⏰ Válido pelos próximos 5 segundos');
+        
+        // Permitir que o Slate processe normalmente - NÃO prevenir default
+        return;
+      }
+      
+      // Para elementos não-Slate, usar o método normal
       // Prevenir comportamento padrão IMEDIATAMENTE
       event.preventDefault();
       event.stopPropagation();
@@ -1340,6 +1409,8 @@
     
     if (isEditableElement(element)) {
       state.activeElement = element;
+      // Limpar estado ao focar para garantir que não há travamento
+      state.isProcessing = false;
       log('📝 Elemento ativo:', element.tagName);
     }
   };
@@ -1348,6 +1419,8 @@
     if (state.activeElement) {
       clearElementBuffer(state.activeElement);
       state.activeElement = null;
+      // Liberar estado ao desfocar
+      state.isProcessing = false;
       log('👋 Elemento desfocado');
     }
   };
@@ -1397,10 +1470,16 @@
       try {
         const [url, options] = args;
         
-        // Se houver uma substituição recente (últimos 2 segundos)
+        log('🌐 Fetch interceptado:', url?.substring(0, 100));
+        
+        // Se houver uma substituição recente (últimos 5 segundos - aumentado)
         if (state.lastReplacementText && 
             state.lastReplacementTime && 
-            Date.now() - state.lastReplacementTime < 2000) {
+            Date.now() - state.lastReplacementTime < 5000) {
+          
+          log('✅ Tempo válido para substituição');
+          log('   Comando:', state.lastCommandToReplace);
+          log('   Substituição:', state.lastReplacementText?.substring(0, 50));
           
           // Tentar modificar o payload se for POST/PUT/PATCH
           if (options?.body && options?.method && 
@@ -1415,29 +1494,44 @@
                 try {
                   const json = JSON.parse(body);
                   
+                  log('📦 Payload JSON:', JSON.stringify(json).substring(0, 200));
+                  
                   // Procurar por campos comuns de mensagem
                   const messageFields = ['content', 'message', 'text', 'body', 'msg', 'data'];
                   
                   for (const field of messageFields) {
                     if (json[field] && typeof json[field] === 'string') {
-                      // Se contém o comando mas deveria conter o replacement
-                      const hasCommand = Object.keys(state.macros).some(cmd => 
-                        json[field].includes(cmd)
-                      );
-                      
-                      if (hasCommand) {
-                        log('🔄 Interceptando requisição, corrigindo payload');
+                      // Se temos um comando específico para substituir, usar ele
+                      if (state.lastCommandToReplace && json[field].includes(state.lastCommandToReplace)) {
+                        log('🔄 Interceptando requisição, corrigindo payload (fetch)');
                         log('   Antes:', json[field]);
+                        log('   Substituindo:', state.lastCommandToReplace, '→', state.lastReplacementText);
                         
-                        // Substituir comando pelo texto
-                        Object.keys(state.macros).forEach(cmd => {
-                          if (json[field].includes(cmd)) {
-                            json[field] = json[field].replace(cmd, state.lastReplacementText);
-                          }
-                        });
+                        // Substituir TODAS as ocorrências do comando
+                        json[field] = json[field].replaceAll(state.lastCommandToReplace, state.lastReplacementText);
                         
                         log('   Depois:', json[field]);
                         modified = true;
+                      } else {
+                        // Fallback: verificar todos os comandos conhecidos
+                        const hasCommand = Object.keys(state.macros).some(cmd => 
+                          json[field].includes(cmd)
+                        );
+                        
+                        if (hasCommand) {
+                          log('🔄 Interceptando requisição, corrigindo payload (fallback)');
+                          log('   Antes:', json[field]);
+                          
+                          // Substituir comando pelo texto
+                          Object.keys(state.macros).forEach(cmd => {
+                            if (json[field].includes(cmd)) {
+                              json[field] = json[field].replaceAll(cmd, state.macros[cmd]);
+                            }
+                          });
+                          
+                          log('   Depois:', json[field]);
+                          modified = true;
+                        }
                       }
                     }
                   }
@@ -1479,30 +1573,53 @@
     
     XMLHttpRequest.prototype.send = function(body) {
       try {
+        log('🌐 XHR.send interceptado');
+        
         if (state.lastReplacementText && 
             state.lastReplacementTime && 
-            Date.now() - state.lastReplacementTime < 2000 &&
+            Date.now() - state.lastReplacementTime < 5000 &&
             body && typeof body === 'string') {
+          
+          log('✅ Tempo válido para substituição (XHR)');
+          log('   Comando:', state.lastCommandToReplace);
+          log('   Substituição:', state.lastReplacementText?.substring(0, 50));
           
           try {
             const json = JSON.parse(body);
+            
+            log('📦 Payload JSON (XHR):', JSON.stringify(json).substring(0, 200));
+            
             const messageFields = ['content', 'message', 'text', 'body', 'msg', 'data'];
             let modified = false;
             
             for (const field of messageFields) {
               if (json[field] && typeof json[field] === 'string') {
-                const hasCommand = Object.keys(state.macros).some(cmd => 
-                  json[field].includes(cmd)
-                );
-                
-                if (hasCommand) {
+                // Se temos um comando específico para substituir, usar ele
+                if (state.lastCommandToReplace && json[field].includes(state.lastCommandToReplace)) {
                   log('🔄 Interceptando XHR, corrigindo payload');
-                  Object.keys(state.macros).forEach(cmd => {
-                    if (json[field].includes(cmd)) {
-                      json[field] = json[field].replace(cmd, state.lastReplacementText);
-                    }
-                  });
+                  log('   Antes:', json[field]);
+                  log('   Substituindo:', state.lastCommandToReplace, '→', state.lastReplacementText);
+                  
+                  // Substituir TODAS as ocorrências do comando
+                  json[field] = json[field].replaceAll(state.lastCommandToReplace, state.lastReplacementText);
+                  
+                  log('   Depois:', json[field]);
                   modified = true;
+                } else {
+                  // Fallback: verificar todos os comandos conhecidos
+                  const hasCommand = Object.keys(state.macros).some(cmd => 
+                    json[field].includes(cmd)
+                  );
+                  
+                  if (hasCommand) {
+                    log('🔄 Interceptando XHR, corrigindo payload (fallback)');
+                    Object.keys(state.macros).forEach(cmd => {
+                      if (json[field].includes(cmd)) {
+                        json[field] = json[field].replaceAll(cmd, state.macros[cmd]);
+                      }
+                    });
+                    modified = true;
+                  }
                 }
               }
             }
